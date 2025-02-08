@@ -1,3 +1,0 @@
-load-module module-switch-on-connect
-load-module module-switch-on-port-available
-load-module module-bluetooth-discover
