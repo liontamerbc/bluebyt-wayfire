@@ -64,7 +64,7 @@ cargo build --release --no-default-features --features=wayland
 cd
 
 # Install additional Pacman packages
-sudo pacman -S --noconfirm mako fish lite-xl swappy
+sudo pacman -S --noconfirm mako fish lite-xl swappy thunar
 
 # Install TokyoNight-Dark GTK Theme
 git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git
