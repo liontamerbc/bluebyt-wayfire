@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd
+
 # Update package lists
 sudo pacman -Syu --noconfirm
 
@@ -107,7 +109,4 @@ sudo pacman -S --noconfirm $(pacman -Sgq nerd-fonts)
 
 # Backup your config
 cp -r ~/.config ~/.config_backup
-
-# Clone Bluebyt's dots
-git clone http://github.com/bluebyt/wayfire-dots
 
