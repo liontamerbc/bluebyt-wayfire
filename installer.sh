@@ -57,7 +57,7 @@ ninja -C build install
 cd
 
 # Install Ironbar
-paru -S --noconfirm ironbar-git
+paru -S --noconfirm ironbar.git
 
 # Install Eww
 git clone https://github.com/elkowar/eww.git
