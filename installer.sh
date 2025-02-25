@@ -33,8 +33,8 @@ prompt_yes_no() {
 }
 
 # === Welcome Message ===
-echo "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
-echo "This script will set up Wayfire with a customized desktop experience based on your wayfire-dots fork."
+echo "Welcome to my Wayfire Desktop Environment Installer for Arch Linux!"
+echo "This script will set up Wayfire with a customized desktop experience based your wayfire-dots."
 
 # === Step 1: Update System ===
 echo "Updating package lists..."
