@@ -20,21 +20,9 @@ install_aur() {
     paru -S --noconfirm "$@"
 }
 
-# Prompt user for yes/no input
-prompt_yes_no() {
-    while true; do
-        read -p "$1 (y/n): " yn
-        case $yn in
-            [Yy]*) return 0 ;;
-            [Nn]*) return 1 ;;
-            *) echo "Please answer yes (y) or no (n)." ;;
-        esac
-    done
-}
-
 # === Welcome Message ===
-echo "Welcome to my Wayfire Desktop Environment Installer for Arch Linux!"
-echo "This script will set up Wayfire with a customized desktop experience based your wayfire-dots."
+echo "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
+echo "This script will set up Wayfire with Kitty, Fish, Starship, and other tools."
 
 # === Step 1: Update System ===
 echo "Updating package lists..."
@@ -49,23 +37,10 @@ echo "Installing GTK theme dependencies..."
 install_pacman gtk-engine-murrine gtk-engines sass gnome-themes-extra
 
 # === Step 4: Install Wayland and Core Packages ===
-echo "Installing Wayland and core packages..."
-install_pacman wayland wlroots xorg-xwayland
+echo "Installing Wayland, core packages, and Kitty terminal..."
+install_pacman wayland wlroots xorg-xwayland kitty
 
-# Prompt for terminal emulator choice
-if prompt_yes_no "Would you like to install a terminal emulator (weston-terminal or alacritty)?"; then
-    echo "Which terminal would you like to install?"
-    echo "1) weston-terminal"
-    echo "2) alacritty"
-    read -p "Enter your choice (1 or 2, or press Enter for none): " term_choice
-    case $term_choice in
-        1) install_pacman weston-terminal ;;
-        2) install_pacman alacritty ;;
-        *) echo "Skipping terminal emulator installation." ;;
-    esac
-fi
-
-# === Step 5: Install Paru (AUR Helper) ===
+# === Step 5: Install Paru (AUR Helper) if not already installed ===
 if ! command_exists paru; then
     echo "Installing Paru from AUR..."
     git clone https://aur.archlinux.org/paru.git
@@ -104,36 +79,12 @@ sudo ninja -C build install
 cd ..
 rm -rf wf-shell
 
-# === Step 9: Install Wayfire Plugins ===
-if prompt_yes_no "Install wayfire-plugins-extra for additional features?"; then
-    echo "Building and installing wayfire-plugins-extra..."
-    git clone https://github.com/WayfireWM/wayfire-plugins-extra.git
-    cd wayfire-plugins-extra
-    meson build --prefix=/usr --buildtype=release
-    ninja -C build
-    sudo ninja -C build install
-    cd ..
-    rm -rf wayfire-plugins-extra
-fi
-
-# === Step 10: Install Desktop Utilities ===
+# === Step 9: Install Desktop Utilities ===
 echo "Installing desktop utilities..."
 install_pacman polkit-gnome networkmanager
 sudo systemctl enable NetworkManager
 
-# === Step 11: Install wf-recorder ===
-if prompt_yes_no "Install wf-recorder for screen recording?"; then
-    echo "Building and installing wf-recorder..."
-    git clone https://github.com/ammen99/wf-recorder.git
-    cd wf-recorder
-    meson build --prefix=/usr --buildtype=release
-    ninja -C build
-    sudo ninja -C build install
-    cd ..
-    rm -rf wf-recorder
-fi
-
-# === Step 12: Install Themes and Icons ===
+# === Step 10: Install Themes and Icons ===
 echo "Installing TokyoNight-Dark GTK Theme..."
 git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git
 cd Tokyo-Night-GTK-Theme/themes
@@ -151,25 +102,26 @@ echo "[Settings]
 gtk-theme-name=TokyoNight-Dark
 gtk-icon-theme-name=Tela-circle" > ~/.config/gtk-3.0/settings.ini
 
-# === Step 13: Install Optional Tools ===
-if prompt_yes_no "Install optional system tools (fish shell, mako notifications, etc.)?"; then
-    echo "Installing optional tools..."
-    install_pacman fish mako swappy
-    if prompt_yes_no "Set Fish as your default shell?"; then
-        echo "/usr/bin/fish" | sudo tee -a /etc/shells
-        chsh -s /usr/bin/fish
-    fi
-fi
+# === Step 11: Install System Tools including exa and Fish ===
+echo "Installing system tools: exa, Fish, mako, swappy..."
+install_pacman exa fish mako swappy
 
-# === Step 14: Install Starship Prompt ===
-if prompt_yes_no "Install Starship prompt for a customizable shell experience?"; then
-    echo "Installing Starship prompt..."
-    curl -sS https://starship.rs/install.sh | sh -s -- -y
-    mkdir -p ~/.config/fish
-    echo "starship init fish | source" >> ~/.config/fish/config.fish
-fi
+# Set Fish as the default shell
+echo "Setting Fish as the default shell..."
+echo "/usr/bin/fish" | sudo tee -a /etc/shells
+chsh -s /usr/bin/fish
 
-# === Step 15: Backup and Install Configuration Files and Binaries ===
+# === Step 12: Install Eww from AUR ===
+echo "Installing Eww from AUR..."
+install_aur eww
+
+# === Step 13: Install Starship Prompt ===
+echo "Installing Starship prompt..."
+curl -sS https://starship.rs/install.sh | sh -s -- -y
+mkdir -p ~/.config/fish
+echo "starship init fish | source" >> ~/.config/fish/config.fish
+
+# === Step 14: Backup and Install Configuration Files and Binaries ===
 echo "Backing up existing configuration..."
 _backup_dir=~/.config_backup_$(date +%F_%T)
 mkdir -p "$_backup_dir"
@@ -191,33 +143,31 @@ if [ -d "wayfire-dots/bin" ]; then
     mv wayfire-dots/bin wayfire-dots/.bin
     mkdir -p ~/.bin
     cp -r wayfire-dots/.bin/* ~/.bin/
-    # Add ~/.bin to PATH in shell configuration
-    if [ -f ~/.bashrc ]; then
-        echo 'export PATH="$HOME/.bin:$PATH"' >> ~/.bashrc
-    elif [ -f ~/.zshrc ]; then
-        echo 'export PATH="$HOME/.bin:$PATH"' >> ~/.zshrc
-    elif [ -f ~/.config/fish/config.fish ]; then
-        echo 'set -gx PATH $HOME/.bin $PATH' >> ~/.config/fish/config.fish
-    fi
+    # Add ~/.bin to PATH in Fish configuration
+    echo 'set -gx PATH $HOME/.bin $PATH' >> ~/.config/fish/config.fish
     echo "Binaries have been placed in ~/.bin/ and added to your PATH."
 else
     echo "No bin/ directory found in wayfire-dots. Skipping binary setup."
 fi
 
-if [ -f "wayfire-dots/wayfire.desktop" ]; then
-    sudo mkdir -p /usr/share/wayland-sessions
-    sudo cp wayfire-dots/wayfire.desktop /usr/share/wayland-sessions/
-    echo "Wayfire session file installed to /usr/share/wayland-sessions/"
-else
-    echo "Warning: wayfire.desktop not found. You may need to configure your login manager manually."
+# Ensure wayfire.desktop is present
+if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+    echo "Creating wayfire.desktop..."
+    sudo tee /usr/share/wayland-sessions/wayfire.desktop <<EOF
+[Desktop Entry]
+Name=Wayfire
+Comment=A lightweight and customizable Wayland compositor
+Exec=/usr/bin/wayfire
+Type=Application
+EOF
 fi
+
 rm -rf wayfire-dots
 
-# === Step 16: Final Instructions ===
+# === Step 15: Final Instructions ===
 echo "Installation complete!"
 echo "To start Wayfire:"
 echo "1. Log out of your current session."
-echo "2. At your login manager (e.g., GDM, LightDM), select the 'Wayfire' session."
+echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
-echo "Note: If Wayfire isn't listed, ensure /usr/share/wayland-sessions/wayfire.desktop exists."
-echo "If you installed binaries, you may need to restart your shell or source your config file (e.g., 'source ~/.bashrc') to use them."
+echo "Note: Fish shell and Starship prompt are now set as default."
