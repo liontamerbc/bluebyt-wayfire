@@ -3,7 +3,7 @@ Wayfire is a 3D Wayland compositor
 ## Warning 
 - This guide is for Archlinux and it now provides an installer. Some steps might not be completed.
 
-- All directories have been updates with a universal placeholder so it can work out of the box on all systems!
+- All directories have been updates with a universal placeholders, so it can work out of the box on all systems!
 
 - The ```.bin``` and ```.config``` folders are now preceded by a dot, as they should be!
 
