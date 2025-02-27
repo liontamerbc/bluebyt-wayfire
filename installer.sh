@@ -121,13 +121,13 @@ curl -sS https://starship.rs/install.sh | sh -s -- -y
 mkdir -p ~/.config/fish
 echo "starship init fish | source" >> ~/.config/fish/config.fish
 
-# === Step 14: Backup and Install Configuration Files and Binaries ===
+# === Step 14: Backup and Install Configuration Files, Binaries, and Wallpaper ===
 echo "Backing up existing configuration..."
 _backup_dir=~/.config_backup_$(date +%F_%T)
 mkdir -p "$_backup_dir"
 cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true
 
-echo "Cloning and setting up configuration files and binaries..."
+echo "Cloning and setting up configuration files, binaries, and wallpaper..."
 git clone https://github.com/bluebyt/wayfire-dots.git
 if [ -d "wayfire-dots/config" ]; then
     mkdir -p ~/.config
@@ -150,6 +150,16 @@ else
     echo "No bin/ directory found in wayfire-dots. Skipping binary setup."
 fi
 
+# Copy wallpaper to Pictures/Wallpaper directory
+if [ -f "wayfire-dots/Pictures/Paysage.png" ]; then
+    echo "Copying wallpaper Paysage.png to ~/Pictures/Wallpaper..."
+    mkdir -p ~/Pictures/Wallpaper
+    cp "wayfire-dots/Pictures/Paysage.png" ~/Pictures/Wallpaper/
+    echo "Wallpaper copied to ~/Pictures/Wallpaper/Paysage.png"
+else
+    echo "Warning: Paysage.png not found in wayfire-dots/Pictures/. Skipping wallpaper setup."
+fi
+
 # Ensure wayfire.desktop is present
 if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
     echo "Creating wayfire.desktop..."
@@ -170,4 +180,4 @@ echo "To start Wayfire:"
 echo "1. Log out of your current session."
 echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
-echo "Note: Fish shell and Starship prompt are now set as default."
+echo "Note: Fish shell and Starship prompt are now set as default, and Paysage.png has been copied to ~/Pictures/Wallpaper."
