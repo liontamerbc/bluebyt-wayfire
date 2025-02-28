@@ -151,7 +151,7 @@ git clone https://github.com/liontamerbc/bluebyt-wayfire.git bluebyt-wayfire
 if [ -d "bluebyt-wayfire/Wallpaper" ]; then
     echo "Moving Wallpaper folder to ~/Pictures..."
     mkdir -p ~/Pictures
-    mv Bluebyt-Wayfire/Wallpaper ~/Pictures/
+    mv bluebyt-wayfire/Wallpaper ~/Pictures/
     echo "Wallpaper folder moved to ~/Pictures/Wallpaper"
 else 
     echo "Warning: Wallpaper folder not found in Bluebyt-Wayfire. Skipping wallpaper setup."
