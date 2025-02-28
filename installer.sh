@@ -146,9 +146,9 @@ echo "starship init fish | source" >> ~/.config/fish/config.fish
 
 # === Step 14: Clone Repository and Move Wallpaper Folder ===
 echo "Cloning the Bluebyt-Wayfire repository..."
-git clone https://github.com/bluebyt/Bluebyt-Wayfire.git Bluebyt-Wayfire
+git clone https://github.com/liontamerbc/bluebyt-wayfire.git bluebyt-wayfire
 
-if [ -d "Bluebyt-Wayfire/Wallpaper" ]; then
+if [ -d "bluebyt-wayfire/Wallpaper" ]; then
     echo "Moving Wallpaper folder to ~/Pictures..."
     mkdir -p ~/Pictures
     mv Bluebyt-Wayfire/Wallpaper ~/Pictures/
@@ -163,11 +163,11 @@ _backup_dir=~/.config_backup_$(date +%F_%T)
 mkdir -p "$_backup_dir" 
 cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true 
 
-if [ -d "Bluebyt-Wayfire/config" ]; then 
+if [ -d "bluebyt-wayfire/config" ]; then 
     mkdir -p ~/.config 
-    cp -r Bluebyt-Wayfire/config/* ~/.config/
+    cp -r bluebyt-wayfire/config/* ~/.config/
 else 
-    echo "Warning: Configuration directory not found in Bluebyt-Wayfire. Skipping config setup." 
+    echo "Warning: Configuration directory not found in bluebyt-wayfire. Skipping config setup." 
 fi 
 
 if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then 
