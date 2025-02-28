@@ -103,14 +103,13 @@ echo "Installing Aretha Dark Icons..."
 git clone https://github.com/L4ki/Aretha-Plasma-Themes.git
 cd Aretha-Plasma-Themes
 
-# Install the icons - assuming they are in an Icons directory
 if [ -d "Icons" ]; then
     echo "Installing Aretha Dark Icons from local repo..."
     mkdir -p ~/.icons
     cp -r Icons/* ~/.icons/
     echo "Aretha Dark Icons installed to ~/.icons"
 else
-    echo "Icons directory not found in Aretha-Plasma-Themes.  Skipping Aretha Dark Icons installation."
+    echo "Icons directory not found in Aretha-Plasma-Themes. Skipping Aretha Dark Icons installation."
 fi
 
 cd ..
@@ -132,9 +131,12 @@ echo "Setting Fish as the default shell..."
 echo "/usr/bin/fish" | sudo tee -a /etc/shells
 chsh -s /usr/bin/fish
 
-# === Step 12: Install Eww from AUR ===
+# === Step 12: Install Eww and Ironbar from AUR ===
 echo "Installing Eww from AUR..."
 install_aur eww
+
+echo "Installing Ironbar from AUR..."
+install_aur ironbar-git
 
 # === Step 13: Install Starship Prompt ===
 echo "Installing Starship prompt..."
@@ -146,63 +148,31 @@ echo "starship init fish | source" >> ~/.config/fish/config.fish
 echo "Cloning the Bluebyt-Wayfire repository..."
 git clone https://github.com/bluebyt/Bluebyt-Wayfire.git Bluebyt-Wayfire
 
-# Move Wallpaper folder to ~/Pictures
 if [ -d "Bluebyt-Wayfire/Wallpaper" ]; then
     echo "Moving Wallpaper folder to ~/Pictures..."
     mkdir -p ~/Pictures
     mv Bluebyt-Wayfire/Wallpaper ~/Pictures/
     echo "Wallpaper folder moved to ~/Pictures/Wallpaper"
-else
+else 
     echo "Warning: Wallpaper folder not found in Bluebyt-Wayfire. Skipping wallpaper setup."
 fi
 
-# === Step 15: Backup and Install Configuration Files and Binaries ===
-echo "Backing up existing configuration..."
-_backup_dir=~/.config_backup_$(date +%F_%T)
-mkdir -p "$_backup_dir"
-cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true
+# === Step 15: Backup and Install Configuration Files and Binaries === 
+echo "Backing up existing configuration..." 
+_backup_dir=~/.config_backup_$(date +%F_%T) 
+mkdir -p "$_backup_dir" 
+cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true 
 
-echo "Setting up configuration files and binaries..."
-
-# Assuming configuration files are in Bluebyt-Wayfire/config
-if [ -d "Bluebyt-Wayfire/config" ]; then
-    mkdir -p ~/.config
+if [ -d "Bluebyt-Wayfire/config" ]; then 
+    mkdir -p ~/.config 
     cp -r Bluebyt-Wayfire/config/* ~/.config/
-    echo "Configuration files placed in ~/.config/"
-else
-    echo "Warning: Configuration directory not found in Bluebyt-Wayfire. Skipping config setup."
-fi
+else 
+    echo "Warning: Configuration directory not found in Bluebyt-Wayfire. Skipping config setup." 
+fi 
 
-# Handle binaries if bin/ directory exists
-if [ -d "Bluebyt-Wayfire/bin" ]; then
-    echo "Setting up binaries in ~/.bin/..."
-    mv Bluebyt-Wayfire/bin ~/.bin
-    # Add ~/.bin to PATH in Fish configuration
-    echo 'set -gx PATH $HOME/.bin $PATH' >> ~/.config/fish/config.fish
-    echo "Binaries have been placed in ~/.bin/ and added to your PATH."
-else
-    echo "No bin/ directory found in Bluebyt-Wayfire. Skipping binary setup."
-fi
+if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then 
+sudo tee /usr/share/wayland-sessions/wayfire.desktop <<EOF 
+[Desktop Entry] Name=Wayfire Comment=A lightweight customizable Wayland compositor Exec=/usr/bin/wayfire Type=Application EOF fi 
 
-# Ensure wayfire.desktop is present
-if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-    echo "Creating wayfire.desktop..."
-    sudo tee /usr/share/wayland-sessions/wayfire.desktop <<EOF
-[Desktop Entry]
-Name=Wayfire
-Comment=A lightweight and customizable Wayland compositor
-Exec=/usr/bin/wayfire
-Type=Application
-EOF
-fi
+rm Bluebyt repo.
 
-# Clean up the cloned repository folder
-rm -rf Bluebyt-Wayfire
-
-# === Step 16: Final Instructions ===
-echo "Installation complete!"
-echo "To start Wayfire:"
-echo "1. Log out of your current session."
-echo "2. At your login manager, select the 'Wayfire' session."
-echo "3. Log in and enjoy your new desktop environment!"
-echo "Note: Fish shell and Starship prompt are now set as default, and the Wallpaper folder has been moved to ~/Pictures/Wallpaper."
