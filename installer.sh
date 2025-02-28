@@ -145,7 +145,7 @@ mkdir -p ~/.config/fish
 echo "starship init fish | source" >> ~/.config/fish/config.fish
 
 # === Step 14: Clone Repository and Move Wallpaper Folder ===
-echo "Cloning the Bluebyt-Wayfire repository..."
+echo "Cloning the bluebyt-wayfire repository..."
 git clone https://github.com/liontamerbc/bluebyt-wayfire.git bluebyt-wayfire
 
 if [ -d "bluebyt-wayfire/Wallpaper" ]; then
