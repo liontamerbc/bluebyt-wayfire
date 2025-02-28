@@ -121,43 +121,33 @@ curl -sS https://starship.rs/install.sh | sh -s -- -y
 mkdir -p ~/.config/fish
 echo "starship init fish | source" >> ~/.config/fish/config.fish
 
-# === Step 14: Move Wallpaper Folder ===
-# Move Wallpaper folder to ~/Pictures
-if [ -d "bluebyt-wayfire/Wallpaper" ]; then
-    echo "Moving Wallpaper folder to ~/Pictures..."
-    mkdir -p ~/Pictures
-    mv bluebyt-wayfire/Wallpaper ~/Pictures/
-    echo "Wallpaper folder moved to ~/Pictures/Wallpaper"
-else
-    echo "Warning: Wallpaper folder not found in bluebyt-wayfire. Skipping wallpaper setup."
-fi
-
-# === Step 15: Backup and Install Configuration Files and Binaries ===
+# === Step 14: Backup and Install Configuration Files and Binaries ===
 echo "Backing up existing configuration..."
 _backup_dir=~/.config_backup_$(date +%F_%T)
 mkdir -p "$_backup_dir"
 cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true
 
-echo "Setting up configuration files and binaries..."
-
-# Assuming configuration files are in Bluebyt-Wayfire/config
-if [ -d "bluebyt-wayfire/config" ]; then
+echo "Cloning and setting up configuration files and binaries..."
+git clone https://github.com/bluebyt/wayfire-dots.git
+if [ -d "wayfire-dots/config" ]; then
     mkdir -p ~/.config
-    cp -r bluebyt-wayfire/config/* ~/.config/
+    cp -r wayfire-dots/config/* ~/.config/
     echo "Configuration files placed in ~/.config/"
 else
-    echo "Warning: Configuration directory not found in bluebyt-wayfire. Skipping config setup."
+    echo "Warning: Configuration directory not found in wayfire-dots. Skipping config setup."
 fi
 
 # Handle binaries if bin/ directory exists
-if [ -d "bluebyt-wayfire/bin" ]; then
+if [ -d "wayfire-dots/bin" ]; then
     echo "Setting up binaries in ~/.bin/..."
-    mv bluebyt-wayfire/bin ~/.bin
+    mv wayfire-dots/bin wayfire-dots/.bin
+    mkdir -p ~/.bin
+    cp -r wayfire-dots/.bin/* ~/.bin/
     # Add ~/.bin to PATH in Fish configuration
     echo 'set -gx PATH $HOME/.bin $PATH' >> ~/.config/fish/config.fish
     echo "Binaries have been placed in ~/.bin/ and added to your PATH."
 else
-    echo "No bin/ directory found in Bluebyt-Wayfire. Skipping binary setup."
+    echo "No bin/ directory found in wayfire-dots. Skipping binary setup."
 fi
 
 # Ensure wayfire.desktop is present
@@ -172,13 +162,12 @@ Type=Application
 EOF
 fi
 
-# Clean up the cloned repository folder
-rm -rf bluebyt-wayfire
+rm -rf wayfire-dots
 
-# === Step 16: Final Instructions ===
+# === Step 15: Final Instructions ===
 echo "Installation complete!"
 echo "To start Wayfire:"
 echo "1. Log out of your current session."
 echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
-echo "Note: Fish shell and Starship prompt are now set as default, and the Wallpaper folder has been moved to ~/Pictures/Wallpaper."
+echo "Note: Fish shell and Starship prompt are now set as default."
