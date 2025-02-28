@@ -154,7 +154,7 @@ if [ -d "bluebyt-wayfire/Wallpaper" ]; then
     mv bluebyt-wayfire/Wallpaper ~/Pictures/
     echo "Wallpaper folder moved to ~/Pictures/Wallpaper"
 else 
-    echo "Warning: Wallpaper folder not found in Bluebyt-Wayfire. Skipping wallpaper setup."
+    echo "Warning: Wallpaper folder not found in bluebyt-wayfire. Skipping wallpaper setup."
 fi
 
 # === Step 15: Backup and Install Configuration Files and Binaries === 
