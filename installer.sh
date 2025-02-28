@@ -99,8 +99,22 @@ cd Tela-circle-icon-theme
 cd ..
 rm -rf Tela-circle-icon-theme
 
-echo "Installing Aretha Dark Icons from AUR..."
-install_aur aretha-plasma-themes
+echo "Installing Aretha Dark Icons..."
+git clone https://github.com/L4ki/Aretha-Plasma-Themes.git
+cd Aretha-Plasma-Themes
+
+# Install the icons - assuming they are in an Icons directory
+if [ -d "Icons" ]; then
+    echo "Installing Aretha Dark Icons from local repo..."
+    mkdir -p ~/.icons
+    cp -r Icons/* ~/.icons/
+    echo "Aretha Dark Icons installed to ~/.icons"
+else
+    echo "Icons directory not found in Aretha-Plasma-Themes.  Skipping Aretha Dark Icons installation."
+fi
+
+cd ..
+rm -rf Aretha-Plasma-Themes
 
 # Apply theme and icons globally
 echo "Applying theme and icons..."
