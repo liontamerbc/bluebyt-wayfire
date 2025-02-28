@@ -121,10 +121,7 @@ curl -sS https://starship.rs/install.sh | sh -s -- -y
 mkdir -p ~/.config/fish
 echo "starship init fish | source" >> ~/.config/fish/config.fish
 
-# === Step 14: Clone Repository and Move Wallpaper Folder ===
-echo "Cloning the bluebyt-wayfire repository..."
-git clone https://github.com/liontamerbc/bluebyt-wayfire.git Bluebyt-Wayfire
-
+# === Step 14: Move Wallpaper Folder ===
 # Move Wallpaper folder to ~/Pictures
 if [ -d "bluebyt-wayfire/Wallpaper" ]; then
     echo "Moving Wallpaper folder to ~/Pictures..."
