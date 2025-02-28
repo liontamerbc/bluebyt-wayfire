@@ -92,8 +92,15 @@ cd Tokyo-Night-GTK-Theme/themes
 cd ../..
 rm -rf Tokyo-Night-GTK-Theme
 
-echo "Installing Tela Circle icon theme from AUR..."
-install_aur tela-circle-icon-theme
+echo "Installing Tela Circle icon theme..."
+git clone https://github.com/vinceliuice/Tela-circle-icon-theme.git
+cd Tela-circle-icon-theme
+./install.sh -a
+cd ..
+rm -rf Tela-circle-icon-theme
+
+echo "Installing Aretha Dark Icons from AUR..."
+install_aur aretha-plasma-themes
 
 # Apply theme and icons globally
 echo "Applying theme and icons..."
