@@ -128,21 +128,21 @@ mkdir -p "$_backup_dir"
 cp -r ~/.config/* "$_backup_dir/" 2>/dev/null || true
 
 echo "Cloning and setting up configuration files and binaries..."
-git clone https://github.com/bluebyt/wayfire-dots.git
-if [ -d "wayfire-dots/config" ]; then
+git clone https://github.com/liontamerbc/bluebyt-wayfire 
+if [ -d "bluebyt-wayfire/.config" ]; then
     mkdir -p ~/.config
-    cp -r wayfire-dots/config/* ~/.config/
+    cp -r bluebyt-wayfire/.config/* ~/.config/
     echo "Configuration files placed in ~/.config/"
 else
-    echo "Warning: Configuration directory not found in wayfire-dots. Skipping config setup."
+    echo "Warning: Configuration directory not found in bluebyt-wayfire. Skipping config setup."
 fi
 
 # Handle binaries if bin/ directory exists
-if [ -d "wayfire-dots/bin" ]; then
+if [ -d "bluebyt-wayfire/.bin" ]; then
     echo "Setting up binaries in ~/.bin/..."
-    mv wayfire-dots/bin wayfire-dots/.bin
+    mv bluebyt-wayfire/.bin ~/.bin
     mkdir -p ~/.bin
-    cp -r wayfire-dots/.bin/* ~/.bin/
+    cp -r bluebyt-wayfire/.bin/* ~/.bin/
     # Add ~/.bin to PATH in Fish configuration
     echo 'set -gx PATH $HOME/.bin $PATH' >> ~/.config/fish/config.fish
     echo "Binaries have been placed in ~/.bin/ and added to your PATH."
@@ -161,8 +161,6 @@ Exec=/usr/bin/wayfire
 Type=Application
 EOF
 fi
-
-rm -rf wayfire-dots
 
 # === Step 15: Final Instructions ===
 echo "Installation complete!"
