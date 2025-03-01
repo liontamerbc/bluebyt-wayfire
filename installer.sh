@@ -60,7 +60,7 @@ confirm() {
 
 # === Welcome Message ===
 echo "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
-echo "This script will set up Wayfire with Kitty, Fish, Starship, and other tools."
+echo "This script will set up Bluebyt's Wayfire."
 confirm "Do you want to proceed with the installation?"
 
 # === Step 1: Pre-flight Checks ===
