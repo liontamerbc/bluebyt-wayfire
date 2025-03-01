@@ -199,7 +199,7 @@ chsh -s /usr/bin/fish
 # === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing packages from AUR..."
-    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp
+    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar
 else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
