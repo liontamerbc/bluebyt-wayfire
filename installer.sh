@@ -196,10 +196,10 @@ log "Setting Fish as the default shell..."
 echo "/usr/bin/fish" | sudo tee -a /etc/shells
 chsh -s /usr/bin/fish
 
-# === Step 13: Install Eww and ironbar from AUR ===
+# === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
-    log "Installing Eww and ironbar from AUR..."
-    install_aur eww ironbar
+    log "Installing packages from AUR..."
+    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp
 else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
