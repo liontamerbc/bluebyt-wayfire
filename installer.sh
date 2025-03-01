@@ -1,4 +1,4 @@
-I'll#!/bin/bash
+#!/bin/bash
 
 # Exit on any error to prevent partial installations
 set -e
@@ -187,7 +187,7 @@ echo "[Settings]
 gtk-theme-name=$THEME
 gtk-icon-theme-name=Tela-circle" > ~/.config/gtk-3.0/settings.ini
 
-# === Step 12: Install System Tools including exa and Fish ===
+# === Step 12: Install System Tools including exa, Fish, and Zed ===
 log "Installing system tools: exa, Fish, mako, swappy..."
 install_pacman exa fish mako swappy
 
@@ -195,6 +195,20 @@ confirm "Do you want to set Fish as your default shell?"
 log "Setting Fish as the default shell..."
 echo "/usr/bin/fish" | sudo tee -a /etc/shells
 chsh -s /usr/bin/fish
+
+# Install Zed editor
+log "Installing Zed editor..."
+if ! command_exists "zed"; then
+    curl -f https://zed.dev/install.sh | sh 2>>"$LOG_FILE" || { log "Failed to install Zed editor."; FAILED=true; }
+    if command_exists "zed"; then
+        log "Zed editor installed successfully: $(zed --version)"
+    else
+        log "Warning: Zed installation completed but 'zed' command not found."
+        FAILED=true
+    fi
+else
+    log "Zed editor is already installed: $(zed --version)"
+fi
 
 # === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
@@ -290,7 +304,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish; do
+for cmd in wayfire kitty fish zed; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
