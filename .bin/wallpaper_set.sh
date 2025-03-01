@@ -1,4 +1,4 @@
 #!/bin/sh
  
-swww img ~/Pictures/Grayscale.jpeg -t any --transition-fps 90
+swww img ~/Pictures/Wallpaper/Paysage.png -t any --transition-fps 90
 
