@@ -5,6 +5,8 @@ Wayfire is a 3D Wayland compositor
 
 - All directories inside wf-shell.ini & wayfire.ini have been updated with universal placeholders, so it can work out of the box on all systems!
 
+- Wallpapers will be copied to /usr/share/Wallpaper
+
 - The ```.bin``` and ```.config``` folders are now preceded by a dot, as they should be!
 
 - For more information, please refer to the Wayfire wiki [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki)
