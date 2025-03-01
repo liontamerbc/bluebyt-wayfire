@@ -20,7 +20,7 @@ alias fox3='catnip -c ~/.config/catnip/config_fox3.toml'
 # alias ll='lsd -ahl'
 alias icat='kitten icat'
 alias cat='catnip' 
-catnip
+
 export LS_COLORS="*.ini=31:*.ttf=36:*.toml=35"
 alias ls='exa --icons -a'
 alias ll='exa --icons -ahl'
