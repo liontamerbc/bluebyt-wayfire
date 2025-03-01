@@ -111,9 +111,10 @@ echo "Setting Fish as the default shell..."
 echo "/usr/bin/fish" | sudo tee -a /etc/shells
 chsh -s /usr/bin/fish
 
-# === Step 12: Install Eww from AUR ===
+# === Step 12: Install Eww and ironbar from AUR ===
 echo "Installing Eww from AUR..."
 install_aur eww
+install_aur ironbar
 
 # === Step 13: Install Starship Prompt ===
 echo "Installing Starship prompt..."
