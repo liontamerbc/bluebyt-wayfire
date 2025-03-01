@@ -4,117 +4,160 @@
 set -e
 
 # === Global Variables ===
-SCRIPT_DIR="$(pwd)"
+SCRIPT_DIR="$(pwd)"  # This will be $HOME/bluebyt-wayfire since you've cd'ed there
 BACKUP_DIR=~/.config_backup_$(date +%F_%T)
 FAILED=false
+LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
+THEME="TokyoNight-Dark"
+INSTALL_ALL=true
+SKIP_WALLPAPERS=false
+
+# === Command Line Options ===
+while getopts ":t:pw" opt; do
+    case $opt in
+        t) THEME="$OPTARG";;
+        p) INSTALL_ALL=false;;
+        w) SKIP_WALLPAPERS=true;;
+        \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
+    esac
+done
 
 # === Helper Functions ===
-
-# Check if a command exists
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
+log() {
+    echo "$@" | tee -a "$LOG_FILE"
 }
 
-# Check available disk space (minimum in MB)
+command_exists() {
+    if command -v "$1" >/dev/null 2>&1; then
+        local version=$($1 --version 2>/dev/null | head -n1 || echo "unknown")
+        log "$1 found (version: $version)"
+        return 0
+    else
+        log "Error: $1 not found"
+        return 1
+    fi
+}
+
+check_version() {
+    local cmd="$1"
+    local min_version="$2"
+    local current_version=$($cmd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
+    if [ -z "$current_version" ]; then
+        log "Warning: Could not determine $cmd version"
+        return 1
+    fi
+    if [ "$(printf '%s\n' "$min_version" "$current_version" | sort -V | head -n1)" != "$min_version" ]; then
+        log "Error: $cmd version $current_version is less than required $min_version"
+        return 1
+    fi
+    return 0
+}
+
 check_space() {
     local min_space=$1
     local available_space=$(df -m / | tail -1 | awk '{print $4}')
     if [ "$available_space" -lt "$min_space" ]; then
-        echo "Error: Insufficient disk space. Required: ${min_space}MB, Available: ${available_space}MB"
+        log "Error: Insufficient disk space. Required: ${min_space}MB, Available: ${available_space}MB"
         exit 1
     fi
 }
 
-# Install packages with pacman
 install_pacman() {
-    echo "Installing with pacman: $@"
-    sudo pacman -S --needed --noconfirm "$@" || { echo "Pacman install failed for $@"; FAILED=true; }
+    log "Installing with pacman: $@"
+    sudo pacman -S --needed --noconfirm "$@" 2>>"$LOG_FILE" || { log "Pacman install failed for $@"; FAILED=true; }
 }
 
-# Install packages from AUR with paru
 install_aur() {
-    echo "Installing with paru: $@"
-    paru -S --noconfirm "$@" || { echo "Paru install failed for $@"; FAILED=true; }
+    log "Installing with paru: $@"
+    paru -S --noconfirm "$@" 2>>"$LOG_FILE" || { log "Paru install failed for $@"; FAILED=true; }
 }
 
-# Cleanup function for failed installations
 cleanup() {
     if [ "$FAILED" = true ]; then
-        echo "Installation failed. Cleaning up..."
+        log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
         rm -rf wayfire wf-shell paru Tokyo-Night-GTK-Theme 2>/dev/null
-        echo "Cleanup complete. Please check errors and try again."
+        log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
 }
 
-# Confirmation prompt
 confirm() {
     read -p "$1 (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Aborted by user."
+        log "Aborted by user."
         exit 0
     fi
 }
 
 # === Welcome Message ===
-echo "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
-echo "This script will set up Bluebyt's Wayfire."
+log "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
+log "Selected theme: $THEME"
+log "Full installation: $INSTALL_ALL"
+log "Install wallpapers: $((! $SKIP_WALLPAPERS))"
 confirm "Do you want to proceed with the installation?"
 
 # === Step 1: Pre-flight Checks ===
-echo "Checking system requirements..."
-check_space 2000  # Require at least 2GB free space
+log "Checking system requirements..."
+check_space 2000
+log "Verifying critical dependencies..."
+command_exists "git" && check_version "git" "2.30" || FAILED=true
+command_exists "gcc" && check_version "gcc" "10.0" || FAILED=true
 
 # === Step 2: Update System ===
-echo "Updating package lists..."
-sudo pacman -Syu --noconfirm || { echo "System update failed."; FAILED=true; cleanup; }
+log "Updating package lists..."
+sudo pacman -Syu --noconfirm 2>>"$LOG_FILE" || { log "System update failed."; FAILED=true; cleanup; }
 
 # === Step 3: Install Essential Tools ===
-echo "Installing essential build tools..."
-install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
+if [ "$INSTALL_ALL" = true ]; then
+    log "Installing essential build tools..."
+    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
+else
+    log "Skipping optional build tools (partial install)"
+    install_pacman git gcc base-devel
+fi
 
 # === Step 4: Install GTK Theme Dependencies ===
-echo "Installing GTK theme dependencies..."
+log "Installing GTK theme dependencies..."
 install_pacman gtk-engine-murrine gtk-engines sass gnome-themes-extra
 
 # === Step 5: Install Wayland and Core Packages ===
-echo "Installing Wayland, core packages, and Kitty terminal..."
+log "Installing Wayland, core packages, and Kitty terminal..."
 install_pacman wayland wlroots xorg-xwayland kitty
 
 # === Step 6: Install Paru (AUR Helper) if not already installed ===
 if ! command_exists paru; then
-    echo "Installing Paru from AUR..."
-    git clone https://aur.archlinux.org/paru.git || { echo "Failed to clone Paru."; FAILED=true; cleanup; }
+    log "Installing Paru from AUR..."
+    git clone https://aur.archlinux.org/paru.git || { log "Failed to clone Paru."; FAILED=true; cleanup; }
     cd paru
-    makepkg -si --noconfirm || { echo "Paru build failed."; FAILED=true; cleanup; }
+    makepkg -si --noconfirm || { log "Paru build failed."; FAILED=true; cleanup; }
     cd ..
     rm -rf paru
 else
-    echo "Paru is already installed. Version: $(paru --version)"
+    log "Paru is already installed. Version: $(paru --version)"
 fi
 
 # === Step 7: Install Wayfire Dependencies ===
-echo "Installing Wayfire dependencies..."
+log "Installing Wayfire dependencies..."
 install_pacman autoconf boost cmake doctest doxygen freetype2 glib2-devel glm \
     gobject-introspection gtk-layer-shell gtkmm3 libdbusmenu-gtk3 libdrm libevdev \
     libgl libinput libjpeg libnotify libpng libxkbcommon meson nlohmann-json \
     pkg-config pixman wayland-protocols wlroots
 
 # === Step 8: Build and Install Wayfire ===
-echo "Building and installing Wayfire..."
-git clone https://github.com/WayfireWM/wayfire.git || { echo "Failed to clone Wayfire."; FAILED=true; cleanup; }
+log "Building and installing Wayfire..."
+git clone https://github.com/WayfireWM/wayfire.git || { log "Failed to clone Wayfire."; FAILED=true; cleanup; }
 cd wayfire
-meson build --prefix=/usr --buildtype=release || { echo "Meson setup failed."; FAILED=true; cleanup; }
-ninja -C build || { echo "Ninja build failed."; FAILED=true; cleanup; }
+meson build --prefix=/usr --buildtype=release || { log "Meson setup failed."; FAILED=true; cleanup; }
+ninja -C build || { log "Ninja build failed."; FAILED=true; cleanup; }
 sudo ninja -C build install
 cd ..
 rm -rf wayfire
 
 # === Step 9: Build and Install wf-shell ===
-echo "Building and installing wf-shell (Wayfire shell components)..."
-git clone https://github.com/WayfireWM/wf-shell.git || { echo "Failed to clone wf-shell."; FAILED=true; cleanup; }
+log "Building and installing wf-shell (Wayfire shell components)..."
+git clone https://github.com/WayfireWM/wf-shell.git || { log "Failed to clone wf-shell."; FAILED=true; cleanup; }
 cd wf-shell
 meson build --prefix=/usr --buildtype=release
 ninja -C build
@@ -123,77 +166,118 @@ cd ..
 rm -rf wf-shell
 
 # === Step 10: Install Desktop Utilities ===
-echo "Installing desktop utilities..."
+log "Installing desktop utilities..."
 install_pacman polkit-gnome networkmanager
 sudo systemctl enable NetworkManager
 
 # === Step 11: Install Themes and Icons ===
-echo "Installing TokyoNight-Dark GTK Theme..."
-git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git || { echo "Failed to clone theme."; FAILED=true; cleanup; }
+log "Installing $THEME GTK Theme..."
+git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git || { log "Failed to clone theme."; FAILED=true; cleanup; }
 cd Tokyo-Night-GTK-Theme/themes
-./install.sh -d ~/.local/share/themes -c dark -l --tweaks black
+./install.sh -d ~/.local/share/themes -c dark -l --tweaks black 2>>"$LOG_FILE"
 cd ../..
 rm -rf Tokyo-Night-GTK-Theme
 
-echo "Installing Tela Circle icon theme from AUR..."
+log "Installing Tela Circle icon theme from AUR..."
 install_aur tela-circle-icon-theme
 
-# Apply theme and icons globally
-echo "Applying theme and icons..."
+log "Applying theme and icons..."
 mkdir -p ~/.config/gtk-3.0
 echo "[Settings]
-gtk-theme-name=TokyoNight-Dark
+gtk-theme-name=$THEME
 gtk-icon-theme-name=Tela-circle" > ~/.config/gtk-3.0/settings.ini
 
 # === Step 12: Install System Tools including exa and Fish ===
-echo "Installing system tools: exa, Fish, mako, swappy..."
+log "Installing system tools: exa, Fish, mako, swappy..."
 install_pacman exa fish mako swappy
 
-# Set Fish as the default shell with confirmation
 confirm "Do you want to set Fish as your default shell?"
-echo "Setting Fish as the default shell..."
+log "Setting Fish as the default shell..."
 echo "/usr/bin/fish" | sudo tee -a /etc/shells
 chsh -s /usr/bin/fish
 
 # === Step 13: Install Eww and ironbar from AUR ===
-echo "Installing Eww and ironbar from AUR..."
-install_aur eww ironbar
+if [ "$INSTALL_ALL" = true ]; then
+    log "Installing Eww and ironbar from AUR..."
+    install_aur eww ironbar
+else
+    log "Skipping optional AUR packages (eww, ironbar) due to partial install"
+fi
 
-# === Step 14: Backup and Install Configuration Files and Binaries ===
-echo "Backing up existing configuration..."
+# === Step 14: Backup and Copy Configuration Files and Binaries ===
+log "Backing up existing configuration..."
 mkdir -p "$BACKUP_DIR"
 cp -r "$HOME/.config" "$BACKUP_DIR/" 2>/dev/null || true
 cp -r "$HOME/.bin" "$BACKUP_DIR/" 2>/dev/null || true
 
-echo "Setting up configuration files and binaries from existing bluebyt-wayfire directory..."
-if [ -d "bluebyt-wayfire/.config" ]; then
-    cp -r "bluebyt-wayfire/.config" "$HOME/"
-    echo "Configuration directory moved to $HOME/.config/"
+log "Copying configuration files and binaries from current bluebyt-wayfire directory..."
+if [ -d "$SCRIPT_DIR/.config" ]; then
+    cp -rv "$SCRIPT_DIR/.config" "$HOME/" 2>>"$LOG_FILE" >>"$LOG_FILE"
+    if [ $? -eq 0 ]; then
+        log "Configuration directory copied to $HOME/.config/"
+    else
+        log "Error: Failed to copy .config directory from $SCRIPT_DIR to $HOME/"
+        FAILED=true
+    fi
 else
-    echo "Error: .config directory not found in bluebyt-wayfire. Please ensure the repo is cloned in the current directory."
+    log "Error: .config directory not found in $SCRIPT_DIR. Please ensure it exists in the bluebyt-wayfire directory."
     FAILED=true
 fi
 
-# Handle binaries if bin/ directory exists
-if [ -d "bluebyt-wayfire/.bin" ]; then
-    cp -r "bluebyt-wayfire/.bin" "$HOME/"
-    echo "Binaries directory moved to $HOME/.bin/"
-    # Add ~/.bin to PATH in Fish configuration if not already present
-    if ! grep -q "$HOME/.bin" "$HOME/.config/fish/config.fish" 2>/dev/null; then
-        mkdir -p "$HOME/.config/fish"
-        echo 'set -gx PATH $HOME/.bin $PATH' >> "$HOME/.config/fish/config.fish"
-        echo "Added $HOME/.bin to PATH in Fish configuration."
+if [ -d "$SCRIPT_DIR/.bin" ]; then
+    cp -rv "$SCRIPT_DIR/.bin" "$HOME/" 2>>"$LOG_FILE" >>"$LOG_FILE"
+    if [ $? -eq 0 ]; then
+        log "Binaries directory copied to $HOME/.bin/"
+        if ! grep -q "$HOME/.bin" "$HOME/.config/fish/config.fish" 2>/dev/null; then
+            mkdir -p "$HOME/.config/fish"
+            echo 'set -gx PATH $HOME/.bin $PATH' >> "$HOME/.config/fish/config.fish"
+            log "Added $HOME/.bin to PATH in Fish configuration."
+        else
+            log "$HOME/.bin already in PATH."
+        fi
     else
-        echo "$HOME/.bin already in PATH."
+        log "Error: Failed to copy .bin directory from $SCRIPT_DIR to $HOME/"
+        FAILED=true
     fi
 else
-    echo "Error: .bin directory not found in bluebyt-wayfire. Please ensure the repo is cloned in the current directory."
+    log "Error: .bin directory not found in $SCRIPT_DIR. Please ensure it exists in the bluebyt-wayfire directory."
     FAILED=true
+fi
+
+# === Step 14b: Copy Wallpapers ===
+if [ "$SKIP_WALLPAPERS" != "true" ]; then
+    log "Setting up wallpapers from current bluebyt-wayfire directory..."
+    WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpapers"
+    WALLPAPER_DEST="$HOME/Pictures/Wallpapers"
+
+    if [ -d "$WALLPAPER_SOURCE" ]; then
+        mkdir -p "$HOME/Pictures" 2>>"$LOG_FILE"
+        if [ $? -ne 0 ]; then
+            log "Error: Failed to create $HOME/Pictures directory"
+            FAILED=true
+        else
+            cp -rv "$WALLPAPER_SOURCE" "$WALLPAPER_DEST" 2>>"$LOG_FILE" >>"$LOG_FILE"
+            if [ $? -eq 0 ]; then
+                log "Wallpapers successfully copied from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
+                chmod -R u+rw "$WALLPAPER_DEST" 2>>"$LOG_FILE"
+                log "Set user permissions on wallpaper directory"
+            else
+                log "Error: Failed to copy wallpapers from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
+                FAILED=true
+            fi
+        fi
+    else
+        log "Warning: Wallpaper directory not found at $WALLPAPER_SOURCE"
+        log "Please ensure the bluebyt-wayfire directory contains a 'Wallpapers' folder"
+        log "Continuing installation without wallpapers..."
+    fi
+else
+    log "Skipping wallpaper installation as per user request (-w flag)"
 fi
 
 # === Step 15: Ensure wayfire.desktop is present ===
 if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-    echo "Creating wayfire.desktop..."
+    log "Creating wayfire.desktop..."
     sudo tee /usr/share/wayland-sessions/wayfire.desktop <<EOF
 [Desktop Entry]
 Name=Wayfire
@@ -204,22 +288,24 @@ EOF
 fi
 
 # === Step 16: Verify Installations ===
-echo "Verifying key installations..."
-for cmd in wayfire kitty fish starship; do
+log "Verifying key installations..."
+for cmd in wayfire kitty fish; do
     if command_exists "$cmd"; then
-        echo "$cmd installed: $(command -v $cmd)"
+        log "$cmd installed: $(command -v $cmd)"
     else
-        echo "Warning: $cmd not found!"
+        log "Warning: $cmd not found!"
         FAILED=true
     fi
 done
 
 # === Step 17: Cleanup and Final Instructions ===
-cleanup  # Check if any step failed
+cleanup
+log "Installation complete!"
 echo "Installation complete!"
+echo "See $LOG_FILE for detailed installation log"
 echo "To start Wayfire:"
 echo "1. Log out of your current session."
 echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
 echo "Backup of previous config saved to: $BACKUP_DIR"
-echo "Note: Fish shell and Starship prompt are now set as default."
+echo "Note: Fish shell is now set as default."
