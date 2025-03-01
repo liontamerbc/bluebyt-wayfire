@@ -248,19 +248,20 @@ fi
 if [ "$SKIP_WALLPAPERS" != "true" ]; then
     log "Setting up wallpapers from current bluebyt-wayfire directory..."
     WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpaper"
-    WALLPAPER_DEST="$HOME/Pictures/Wallpaper"
+    WALLPAPER_DEST="/usr/share/Wallpaper"
 
     if [ -d "$WALLPAPER_SOURCE" ]; then
-        mkdir -p "$HOME/Pictures" 2>>"$LOG_FILE"
+        log "Copying wallpapers to $WALLPAPER_DEST (requires sudo)..."
+        sudo mkdir -p "$WALLPAPER_DEST" 2>>"$LOG_FILE"
         if [ $? -ne 0 ]; then
-            log "Error: Failed to create $HOME/Pictures directory"
+            log "Error: Failed to create $WALLPAPER_DEST directory"
             FAILED=true
         else
-            cp -rv "$WALLPAPER_SOURCE" "$WALLPAPER_DEST" 2>>"$LOG_FILE" >>"$LOG_FILE"
+            sudo cp -rv "$WALLPAPER_SOURCE"/* "$WALLPAPER_DEST/" 2>>"$LOG_FILE" >>"$LOG_FILE"
             if [ $? -eq 0 ]; then
-                log "Wallpaper successfully copied from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
-                chmod -R u+rw "$WALLPAPER_DEST" 2>>"$LOG_FILE"
-                log "Set user permissions on wallpaper directory"
+                log "Wallpapers successfully copied from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
+                sudo chmod -R a+r "$WALLPAPER_DEST" 2>>"$LOG_FILE"
+                log "Set read permissions for all users on wallpaper directory"
             else
                 log "Error: Failed to copy wallpapers from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
                 FAILED=true
