@@ -41,7 +41,7 @@ command_exists() {
 check_version() {
     local cmd="$1"
     local min_version="$2"
-    local current_version=$($cmd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
+    local current_version="$($cmd --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)"
     if [ -z "$current_version" ]; then
         log "Warning: Could not determine $cmd version"
         return 1
