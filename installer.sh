@@ -247,8 +247,8 @@ fi
 # === Step 14b: Copy Wallpapers ===
 if [ "$SKIP_WALLPAPERS" != "true" ]; then
     log "Setting up wallpapers from current bluebyt-wayfire directory..."
-    WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpapers"
-    WALLPAPER_DEST="$HOME/Pictures/Wallpapers"
+    WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpaper"
+    WALLPAPER_DEST="$HOME/Pictures/Wallpaper"
 
     if [ -d "$WALLPAPER_SOURCE" ]; then
         mkdir -p "$HOME/Pictures" 2>>"$LOG_FILE"
@@ -258,7 +258,7 @@ if [ "$SKIP_WALLPAPERS" != "true" ]; then
         else
             cp -rv "$WALLPAPER_SOURCE" "$WALLPAPER_DEST" 2>>"$LOG_FILE" >>"$LOG_FILE"
             if [ $? -eq 0 ]; then
-                log "Wallpapers successfully copied from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
+                log "Wallpaper successfully copied from $WALLPAPER_SOURCE to $WALLPAPER_DEST"
                 chmod -R u+rw "$WALLPAPER_DEST" 2>>"$LOG_FILE"
                 log "Set user permissions on wallpaper directory"
             else
@@ -268,8 +268,8 @@ if [ "$SKIP_WALLPAPERS" != "true" ]; then
         fi
     else
         log "Warning: Wallpaper directory not found at $WALLPAPER_SOURCE"
-        log "Please ensure the bluebyt-wayfire directory contains a 'Wallpapers' folder"
-        log "Continuing installation without wallpapers..."
+        log "Please ensure the bluebyt-wayfire directory contains a 'Wallpaper' folder"
+        log "Continuing installation without wallpaper..."
     fi
 else
     log "Skipping wallpaper installation as per user request (-w flag)"
