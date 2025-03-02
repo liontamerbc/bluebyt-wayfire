@@ -76,7 +76,7 @@ cleanup() {
     if [ "$FAILED" = true ]; then
         log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme 2>/dev/null
+        rm -rf wayfire wf-shell wcm nwg-dock paru Tokyo-Night-GTK-Theme 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
@@ -112,10 +112,10 @@ sudo pacman -Syu --noconfirm 2>>"$LOG_FILE" || { log "System update failed."; FA
 # === Step 3: Install Essential Tools ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing essential build tools..."
-    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
+    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2 go
 else
     log "Skipping optional build tools (partial install)"
-    install_pacman git gcc base-devel
+    install_pacman git gcc base-devel go
 fi
 
 # === Step 4: Install GTK Theme Dependencies ===
@@ -174,6 +174,16 @@ ninja -C build || { log "Ninja build failed for wcm."; FAILED=true; cleanup; }
 sudo ninja -C build install
 cd ..
 rm -rf wcm
+
+# === Step 9c: Build and Install nwg-dock ===
+log "Building and installing nwg-dock..."
+git clone https://github.com/nwg-piotr/nwg-dock.git || { log "Failed to clone nwg-dock."; FAILED=true; cleanup; }
+cd nwg-dock
+make get || { log "Failed to fetch Go dependencies for nwg-dock."; FAILED=true; cleanup; }
+make build || { log "Failed to build nwg-dock."; FAILED=true; cleanup; }
+sudo make install || { log "Failed to install nwg-dock."; FAILED=true; cleanup; }
+cd ..
+rm -rf nwg-dock
 
 # === Step 10: Install Desktop Utilities ===
 log "Installing desktop utilities..."
@@ -328,7 +338,7 @@ if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-s
         FAILED=true
     fi
 else
-    # Option 2: Download from WayfireWM GitHub (assuming they’re in the wayfire repository under examples or similar)
+    # Option 2: Download from Wayfire GitHub (assuming they’re in the examples directory)
     log "IPC scripts not found in $SCRIPT_DIR/ipc-scripts/, attempting to download from Wayfire GitHub..."
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py" -o "$IPC_DIR/inactive-alpha.py" 2>>"$LOG_FILE" || { log "Failed to download inactive-alpha.py"; FAILED=true; }
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py" -o "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE" || { log "Failed to download wayfire_socket.py"; FAILED=true; }
@@ -397,7 +407,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish zed wcm xava wlogout; do
+for cmd in wayfire kitty fish zed wcm xava wlogout nwg-dock; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
