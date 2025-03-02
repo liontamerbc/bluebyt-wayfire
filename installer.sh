@@ -4,7 +4,7 @@
 set -e
 
 # === Global Variables ===
-SCRIPT_DIR="$(pwd)"  # This will be $HOME/bluebyt-wayfire since you've cd'ed there
+SCRIPT_DIR="$(pwd)"  # Assumes script is run from $HOME/bluebyt-wayfire
 BACKUP_DIR=~/.config_backup_$(date +%F_%T)
 FAILED=false
 LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
@@ -76,7 +76,7 @@ cleanup() {
     if [ "$FAILED" = true ]; then
         log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme 2>/dev/null
+        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Plasma-Themes 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
@@ -111,11 +111,11 @@ sudo pacman -Syu --noconfirm 2>>"$LOG_FILE" || { log "System update failed."; FA
 
 # === Step 3: Install Essential Tools ===
 if [ "$INSTALL_ALL" = true ]; then
-    log "Installing essential build tools and Qt5 dependencies..."
-    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2 qt5-base qt5-svg qt5-declarative qt5-quickcontrols
+    log "Installing essential build tools..."
+    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
 else
     log "Skipping optional build tools (partial install)"
-    install_pacman git gcc base-devel qt5-base qt5-svg qt5-declarative qt5-quickcontrols
+    install_pacman git gcc base-devel
 fi
 
 # === Step 4: Install GTK Theme Dependencies ===
@@ -188,14 +188,30 @@ cd Tokyo-Night-GTK-Theme/themes
 cd ../..
 rm -rf Tokyo-Night-GTK-Theme
 
-log "Installing Tela Circle icon theme and ocs-url from AUR..."
-install_aur tela-circle-icon-theme ocs-url
+log "Installing Aretha-Dark-Icons from GitHub..."
+git clone https://github.com/L4ki/Aretha-Plasma-Themes.git || { log "Failed to clone Aretha-Plasma-Themes."; FAILED=true; cleanup; }
+cd Aretha-Plasma-Themes
+if [ -d "Aretha Icons Themes" ]; then
+    cd "Aretha Icons Themes"
+    mkdir -p ~/.local/share/icons
+    if [ -d "Aretha-Dark-Icons" ]; then
+        cp -r Aretha-Dark-Icons ~/.local/share/icons/ || { log "Failed to copy Aretha-Dark-Icons."; FAILED=true; }
+    else
+        log "Error: Aretha-Dark-Icons directory not found in Aretha Icons Themes."
+        FAILED=true
+    fi
+else
+    log "Error: Aretha Icons Themes directory not found in Aretha-Plasma-Themes."
+    FAILED=true
+fi
+cd ..
+rm -rf Aretha-Plasma-Themes
 
 log "Applying theme and icons..."
 mkdir -p ~/.config/gtk-3.0
 echo "[Settings]
 gtk-theme-name=$THEME
-gtk-icon-theme-name=Tela-circle" > ~/.config/gtk-3.0/settings.ini
+gtk-icon-theme-name=Aretha-Dark-Icons" > ~/.config/gtk-3.0/settings.ini
 
 # === Step 12: Install System Tools including exa, Fish, and Zed ===
 log "Installing system tools: exa, Fish, mako, swappy..."
@@ -328,7 +344,7 @@ if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-s
         FAILED=true
     fi
 else
-    # Option 2: Download from Wayfire GitHub (assuming they’re in the examples directory)
+    # Option 2: Download from Wayfire GitHub
     log "IPC scripts not found in $SCRIPT_DIR/ipc-scripts/, attempting to download from Wayfire GitHub..."
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py" -o "$IPC_DIR/inactive-alpha.py" 2>>"$LOG_FILE" || { log "Failed to download inactive-alpha.py"; FAILED=true; }
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py" -o "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE" || { log "Failed to download wayfire_socket.py"; FAILED=true; }
@@ -352,13 +368,11 @@ fi
 # Modify wayfire.ini
 WAYFIRE_INI="$HOME/.config/wayfire.ini"
 if [ -f "$WAYFIRE_INI" ]; then
-    # Check if plugins line exists and modify it, or append it
     if grep -q "^plugins =" "$WAYFIRE_INI"; then
         sed -i "s/^plugins =.*/plugins = ipc ipc-rules follow-focus/" "$WAYFIRE_INI" 2>>"$LOG_FILE"
     else
         echo "plugins = ipc ipc-rules follow-focus" >> "$WAYFIRE_INI"
     fi
-    # Check if [autostart] exists and append launcher, or create section
     if grep -q "^\[autostart\]" "$WAYFIRE_INI"; then
         if ! grep -q "launcher =" "$WAYFIRE_INI"; then
             sed -i "/^\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py" "$WAYFIRE_INI" 2>>"$LOG_FILE"
@@ -397,7 +411,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish zed wcm xava wlogout ocs-url; do
+for cmd in wayfire kitty fish zed wcm xava wlogout; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
@@ -417,4 +431,3 @@ echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
 echo "Backup of previous config saved to: $BACKUP_DIR"
 echo "Note: Fish shell is now set as default."
-echo "You can now use 'ocs-url' to browse and install additional themes/icons from sites like gnome-look.org."
