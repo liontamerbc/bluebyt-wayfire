@@ -223,7 +223,7 @@ fi
 # === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing packages from AUR..."
-    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout pavucontrol blueman nerd-fonts
+    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout
 else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
@@ -300,6 +300,89 @@ else
     log "Skipping wallpaper installation as per user request (-w flag)"
 fi
 
+# === Step 14c: Configure Follow Focus and Inactive-Alpha ===
+log "Configuring follow-focus and inactive-alpha for Wayfire..."
+
+# Set environment variable
+mkdir -p "$HOME/.config/environment.d"
+echo "WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket" > "$HOME/.config/environment.d/environment.conf"
+if [ $? -eq 0 ]; then
+    log "Environment variable WAYFIRE_SOCKET set in $HOME/.config/environment.d/environment.conf"
+else
+    log "Error: Failed to create environment.conf"
+    FAILED=true
+fi
+
+# Copy or download IPC scripts
+IPC_DIR="$HOME/.config/ipc-scripts"
+mkdir -p "$IPC_DIR"
+
+# Option 1: Copy from SCRIPT_DIR if scripts are included locally
+if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" ]; then
+    cp "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" "$IPC_DIR/" 2>>"$LOG_FILE"
+    cp "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" "$IPC_DIR/" 2>>"$LOG_FILE"
+    if [ $? -eq 0 ]; then
+        log "Copied inactive-alpha.py and wayfire_socket.py to $IPC_DIR"
+    else
+        log "Error: Failed to copy IPC scripts from $SCRIPT_DIR/ipc-scripts/"
+        FAILED=true
+    fi
+else
+    # Option 2: Download from WayfireWM GitHub (assuming they’re in the wayfire repository under examples or similar)
+    log "IPC scripts not found in $SCRIPT_DIR/ipc-scripts/, attempting to download from Wayfire GitHub..."
+    curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py" -o "$IPC_DIR/inactive-alpha.py" 2>>"$LOG_FILE" || { log "Failed to download inactive-alpha.py"; FAILED=true; }
+    curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py" -o "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE" || { log "Failed to download wayfire_socket.py"; FAILED=true; }
+    if [ -f "$IPC_DIR/inactive-alpha.py" ] && [ -f "$IPC_DIR/wayfire_socket.py" ]; then
+        log "Successfully downloaded inactive-alpha.py and wayfire_socket.py to $IPC_DIR"
+    else
+        log "Error: Failed to download one or both IPC scripts"
+        FAILED=true
+    fi
+fi
+
+# Ensure scripts are executable
+chmod +x "$IPC_DIR/inactive-alpha.py" "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE"
+if [ $? -eq 0 ]; then
+    log "Made IPC scripts executable"
+else
+    log "Error: Failed to make IPC scripts executable"
+    FAILED=true
+fi
+
+# Modify wayfire.ini
+WAYFIRE_INI="$HOME/.config/wayfire.ini"
+if [ -f "$WAYFIRE_INI" ]; then
+    # Check if plugins line exists and modify it, or append it
+    if grep -q "^plugins =" "$WAYFIRE_INI"; then
+        sed -i "s/^plugins =.*/plugins = ipc ipc-rules follow-focus/" "$WAYFIRE_INI" 2>>"$LOG_FILE"
+    else
+        echo "plugins = ipc ipc-rules follow-focus" >> "$WAYFIRE_INI"
+    fi
+    # Check if [autostart] exists and append launcher, or create section
+    if grep -q "^\[autostart\]" "$WAYFIRE_INI"; then
+        if ! grep -q "launcher =" "$WAYFIRE_INI"; then
+            sed -i "/^\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py" "$WAYFIRE_INI" 2>>"$LOG_FILE"
+        fi
+    else
+        echo -e "\n[autostart]\nlauncher = $IPC_DIR/inactive-alpha.py" >> "$WAYFIRE_INI"
+    fi
+    if [ $? -eq 0 ]; then
+        log "Updated $WAYFIRE_INI with IPC plugins and autostart configuration"
+    else
+        log "Error: Failed to update $WAYFIRE_INI"
+        FAILED=true
+    fi
+else
+    log "Warning: $WAYFIRE_INI not found, creating with IPC configuration..."
+    echo -e "plugins = ipc ipc-rules follow-focus\n\n[autostart]\nlauncher = $IPC_DIR/inactive-alpha.py" > "$WAYFIRE_INI"
+    if [ $? -eq 0 ]; then
+        log "Created $WAYFIRE_INI with IPC plugins and autostart configuration"
+    else
+        log "Error: Failed to create $WAYFIRE_INI"
+        FAILED=true
+    fi
+fi
+
 # === Step 15: Ensure wayfire.desktop is present ===
 if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
     log "Creating wayfire.desktop..."
@@ -327,4 +410,10 @@ done
 cleanup
 log "Installation complete!"
 echo "Installation complete!"
-echo
+echo "See $LOG_FILE for detailed installation log"
+echo "To start Wayfire:"
+echo "1. Log out of your current session."
+echo "2. At your login manager, select the 'Wayfire' session."
+echo "3. Log in and enjoy your new desktop environment!"
+echo "Backup of previous config saved to: $BACKUP_DIR"
+echo "Note: Fish shell is now set as default."
