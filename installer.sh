@@ -76,7 +76,7 @@ cleanup() {
     if [ "$FAILED" = true ]; then
         log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell paru Tokyo-Night-GTK-Theme 2>/dev/null
+        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
@@ -165,6 +165,16 @@ sudo ninja -C build install
 cd ..
 rm -rf wf-shell
 
+# === Step 9b: Build and Install wcm (Wayfire Config Manager) ===
+log "Building and installing wcm (Wayfire Config Manager)..."
+git clone https://github.com/WayfireWM/wcm.git || { log "Failed to clone wcm."; FAILED=true; cleanup; }
+cd wcm
+meson build --prefix=/usr --buildtype=release || { log "Meson setup failed for wcm."; FAILED=true; cleanup; }
+ninja -C build || { log "Ninja build failed for wcm."; FAILED=true; cleanup; }
+sudo ninja -C build install
+cd ..
+rm -rf wcm
+
 # === Step 10: Install Desktop Utilities ===
 log "Installing desktop utilities..."
 install_pacman polkit-gnome networkmanager
@@ -213,7 +223,7 @@ fi
 # === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing packages from AUR..."
-    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww
+    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git
 else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
@@ -304,7 +314,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish zed; do
+for cmd in wayfire kitty fish zed wcm xava; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
