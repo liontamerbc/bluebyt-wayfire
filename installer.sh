@@ -223,7 +223,7 @@ fi
 # === Step 13: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing packages from AUR..."
-    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git
+    install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout
 else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
@@ -314,7 +314,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish zed wcm xava; do
+for cmd in wayfire kitty fish zed wcm xava wlogout; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
@@ -327,10 +327,4 @@ done
 cleanup
 log "Installation complete!"
 echo "Installation complete!"
-echo "See $LOG_FILE for detailed installation log"
-echo "To start Wayfire:"
-echo "1. Log out of your current session."
-echo "2. At your login manager, select the 'Wayfire' session."
-echo "3. Log in and enjoy your new desktop environment!"
-echo "Backup of previous config saved to: $BACKUP_DIR"
-echo "Note: Fish shell is now set as default."
+echo
