@@ -111,11 +111,11 @@ sudo pacman -Syu --noconfirm 2>>"$LOG_FILE" || { log "System update failed."; FA
 
 # === Step 3: Install Essential Tools ===
 if [ "$INSTALL_ALL" = true ]; then
-    log "Installing essential build tools..."
-    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
+    log "Installing essential build tools and Qt5 dependencies..."
+    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2 qt5-base qt5-svg qt5-declarative qt5-quickcontrols
 else
     log "Skipping optional build tools (partial install)"
-    install_pacman git gcc base-devel
+    install_pacman git gcc base-devel qt5-base qt5-svg qt5-declarative qt5-quickcontrols
 fi
 
 # === Step 4: Install GTK Theme Dependencies ===
@@ -188,8 +188,8 @@ cd Tokyo-Night-GTK-Theme/themes
 cd ../..
 rm -rf Tokyo-Night-GTK-Theme
 
-log "Installing Tela Circle icon theme from AUR..."
-install_aur tela-circle-icon-theme
+log "Installing Tela Circle icon theme and ocs-url from AUR..."
+install_aur tela-circle-icon-theme ocs-url
 
 log "Applying theme and icons..."
 mkdir -p ~/.config/gtk-3.0
@@ -397,7 +397,7 @@ fi
 
 # === Step 16: Verify Installations ===
 log "Verifying key installations..."
-for cmd in wayfire kitty fish zed wcm xava wlogout; do
+for cmd in wayfire kitty fish zed wcm xava wlogout ocs-url; do
     if command_exists "$cmd"; then
         log "$cmd installed: $(command -v $cmd)"
     else
@@ -417,3 +417,4 @@ echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
 echo "Backup of previous config saved to: $BACKUP_DIR"
 echo "Note: Fish shell is now set as default."
+echo "You can now use 'ocs-url' to browse and install additional themes/icons from sites like gnome-look.org."
