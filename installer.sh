@@ -4,7 +4,7 @@
 set -e
 
 # === Global Variables ===
-SCRIPT_DIR="$(pwd)"  # Assumes script is run from $HOME/bluebyt-wayfire
+SCRIPT_DIR="$(pwd)"  # This will be $HOME/bluebyt-wayfire since you've cd'ed there
 BACKUP_DIR=~/.config_backup_$(date +%F_%T)
 FAILED=false
 LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
@@ -76,7 +76,7 @@ cleanup() {
     if [ "$FAILED" = true ]; then
         log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Plasma-Themes wlogout-theme 2>/dev/null
+        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
@@ -112,10 +112,10 @@ sudo pacman -Syu --noconfirm 2>>"$LOG_FILE" || { log "System update failed."; FA
 # === Step 3: Install Essential Tools ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing essential build tools..."
-    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2
+    install_pacman git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl
 else
     log "Skipping optional build tools (partial install)"
-    install_pacman git gcc base-devel
+    install_pacman git gcc base-devel curl
 fi
 
 # === Step 4: Install GTK Theme Dependencies ===
@@ -188,24 +188,26 @@ cd Tokyo-Night-GTK-Theme/themes
 cd ../..
 rm -rf Tokyo-Night-GTK-Theme
 
-log "Installing Aretha-Dark-Icons from GitHub..."
-git clone https://github.com/L4ki/Aretha-Plasma-Themes.git || { log "Failed to clone Aretha-Plasma-Themes."; FAILED=true; cleanup; }
-cd Aretha-Plasma-Themes
-if [ -d "Aretha Icons Themes" ]; then
-    cd "Aretha Icons Themes"
-    mkdir -p ~/.local/share/icons
-    if [ -d "Aretha-Dark-Icons" ]; then
-        cp -r Aretha-Dark-Icons ~/.local/share/icons/ || { log "Failed to copy Aretha-Dark-Icons."; FAILED=true; }
-    else
-        log "Error: Aretha-Dark-Icons directory not found in Aretha Icons Themes."
-        FAILED=true
-    fi
+log "Installing Aretha-Dark-Icons..."
+if [ -f "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" ]; then
+    log "Found Aretha-Dark-Icons.tar.gz in $SCRIPT_DIR, using it..."
+    cp "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" . 2>>"$LOG_FILE" || { log "Failed to copy Aretha-Dark-Icons.tar.gz"; FAILED=true; cleanup; }
 else
-    log "Error: Aretha Icons Themes directory not found in Aretha-Plasma-Themes."
-    FAILED=true
+    log "Aretha-Dark-Icons.tar.gz not found in $SCRIPT_DIR. Attempting to download (this may fail)..."
+    # Fallback URL (replace with actual URL if known, otherwise this is a placeholder likely to fail)
+    ARETHA_URL="https://dl.opendesktop.org/api/files/download/id/<some-id>/Aretha-Dark-Icons.tar.gz"
+    if ! curl -L -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$ARETHA_URL" -o Aretha-Dark-Icons.tar.gz 2>>"$LOG_FILE"; then
+        log "Error: Failed to download Aretha-Dark-Icons from $ARETHA_URL."
+        log "Please manually download Aretha-Dark-Icons.tar.gz from https://www.gnome-look.org/p/2180417 (Files tab),"
+        log "place it in $SCRIPT_DIR, and rerun the script."
+        FAILED=true
+        cleanup
+    fi
 fi
-cd ..
-rm -rf Aretha-Plasma-Themes
+tar -xzf Aretha-Dark-Icons.tar.gz || { log "Failed to extract Aretha-Dark-Icons."; FAILED=true; cleanup; }
+mkdir -p ~/.local/share/icons
+mv Aretha-Dark-Icons ~/.local/share/icons/ || { log "Failed to move Aretha-Dark-Icons to ~/.local/share/icons/"; FAILED=true; cleanup; }
+rm -f Aretha-Dark-Icons.tar.gz
 
 log "Applying theme and icons..."
 mkdir -p ~/.config/gtk-3.0
@@ -284,21 +286,6 @@ else
     FAILED=true
 fi
 
-# Install wlogout-theme and rename to wlogout
-log "Installing wlogout-theme from GitHub..."
-git clone https://github.com/liontamerbc/wlogout-theme.git || { log "Failed to clone wlogout-theme."; FAILED=true; cleanup; }
-if [ -d "wlogout-theme" ]; then
-    mkdir -p "$HOME/.config"
-    cp -r wlogout-theme "$HOME/.config/wlogout" 2>>"$LOG_FILE" || { log "Failed to copy wlogout-theme to ~/.config/wlogout"; FAILED=true; }
-    if [ $? -eq 0 ]; then
-        log "Successfully copied wlogout-theme to $HOME/.config/wlogout"
-    fi
-else
-    log "Error: wlogout-theme directory not found after cloning."
-    FAILED=true
-fi
-rm -rf wlogout-theme
-
 # === Step 14b: Copy Wallpapers ===
 if [ "$SKIP_WALLPAPERS" != "true" ]; then
     log "Setting up wallpapers from current bluebyt-wayfire directory..."
@@ -359,7 +346,7 @@ if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-s
         FAILED=true
     fi
 else
-    # Option 2: Download from Wayfire GitHub
+    # Option 2: Download from Wayfire GitHub (assuming they’re in the examples directory)
     log "IPC scripts not found in $SCRIPT_DIR/ipc-scripts/, attempting to download from Wayfire GitHub..."
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py" -o "$IPC_DIR/inactive-alpha.py" 2>>"$LOG_FILE" || { log "Failed to download inactive-alpha.py"; FAILED=true; }
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py" -o "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE" || { log "Failed to download wayfire_socket.py"; FAILED=true; }
@@ -383,11 +370,13 @@ fi
 # Modify wayfire.ini
 WAYFIRE_INI="$HOME/.config/wayfire.ini"
 if [ -f "$WAYFIRE_INI" ]; then
+    # Check if plugins line exists and modify it, or append it
     if grep -q "^plugins =" "$WAYFIRE_INI"; then
         sed -i "s/^plugins =.*/plugins = ipc ipc-rules follow-focus/" "$WAYFIRE_INI" 2>>"$LOG_FILE"
     else
         echo "plugins = ipc ipc-rules follow-focus" >> "$WAYFIRE_INI"
     fi
+    # Check if [autostart] exists and append launcher, or create section
     if grep -q "^\[autostart\]" "$WAYFIRE_INI"; then
         if ! grep -q "launcher =" "$WAYFIRE_INI"; then
             sed -i "/^\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py" "$WAYFIRE_INI" 2>>"$LOG_FILE"
