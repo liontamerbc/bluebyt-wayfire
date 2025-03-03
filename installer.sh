@@ -76,7 +76,7 @@ cleanup() {
     if [ "$FAILED" = true ]; then
         log "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Plasma-Themes 2>/dev/null
+        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Plasma-Themes wlogout-theme 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
         exit 1
     fi
@@ -283,6 +283,21 @@ else
     log "Error: .bin directory not found in $SCRIPT_DIR. Please ensure it exists in the bluebyt-wayfire directory."
     FAILED=true
 fi
+
+# Install wlogout-theme and rename to wlogout
+log "Installing wlogout-theme from GitHub..."
+git clone https://github.com/liontamerbc/wlogout-theme.git || { log "Failed to clone wlogout-theme."; FAILED=true; cleanup; }
+if [ -d "wlogout-theme" ]; then
+    mkdir -p "$HOME/.config"
+    cp -r wlogout-theme "$HOME/.config/wlogout" 2>>"$LOG_FILE" || { log "Failed to copy wlogout-theme to ~/.config/wlogout"; FAILED=true; }
+    if [ $? -eq 0 ]; then
+        log "Successfully copied wlogout-theme to $HOME/.config/wlogout"
+    fi
+else
+    log "Error: wlogout-theme directory not found after cloning."
+    FAILED=true
+fi
+rm -rf wlogout-theme
 
 # === Step 14b: Copy Wallpapers ===
 if [ "$SKIP_WALLPAPERS" != "true" ]; then
