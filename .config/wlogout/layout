@@ -1,0 +1,35 @@
+{
+    "label" : "lock",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction lock",
+    "keybind" : "l"
+}
+
+{
+    "label" : "logout",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction logout",
+    "keybind" : "m"
+}
+
+{
+    "label" : "shutdown",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction shutdown",
+    "keybind" : "d"
+}
+
+{
+    "label" : "reboot",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction reboot",
+    "keybind" : "r"
+}
+
+{
+    "label" : "suspend",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction suspend",
+    "keybind" : "s"
+}
+
+{
+    "label" : "hibernate",
+    "action" : "/home/liontamerbc/.config/wlogout/scripts/anction hibernate",
+    "keybind" : "h"
+}
