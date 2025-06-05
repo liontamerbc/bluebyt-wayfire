@@ -7,6 +7,7 @@
 ## ✨ Features
 
 - **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers (CPU, GPU, Wi-Fi, Bluetooth), utilities, and configurations.
+- **Optional GNOME Fallback:** The installer gives you the option to automatically install the GNOME desktop (with `-g` or `--gnome`) as a robust fallback and troubleshooting environment.
 - **Universal Config Paths:** Uses environment-agnostic placeholders in config files for seamless portability.
 - **Automatic Wallpapers & Dotfiles:** Installs wallpapers and dotfiles to proper system locations.
 - **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
@@ -67,7 +68,16 @@ cd bluebyt-wayfire
 ./installer.sh
 ```
 
-The installer guides you through all steps, including configs, themes, wallpapers, and now automatically detects and installs CPU microcode, GPU drivers, Wi-Fi, and Bluetooth support for most hardware.
+### GNOME Desktop Option
+
+You can install GNOME as a fallback desktop by passing the `-g` or `--gnome` option:
+
+```sh
+./installer.sh -g        # or
+./installer.sh --gnome
+```
+
+This is **highly recommended for new setups** or if you want a reliable troubleshooting environment.
 
 ---
 
@@ -115,6 +125,19 @@ Clones and builds from source:
 1. Log out of your current session.
 2. At your login manager (e.g., GDM), select the "Wayfire" session.
 3. Log in and enjoy your new desktop environment!
+
+---
+
+## 💡 Why install GNOME as a fallback?
+
+Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong.  
+**The installer allows you to automatically install GNOME (`-g` or `--gnome`) as a stable, full-featured desktop for troubleshooting and recovery.**
+
+**Benefits:**
+- Reliable fallback: Always be able to log into a working desktop if Wayfire fails.
+- Graphical tools for system/network/bluetooth/display.
+- Improved hardware support (drivers, firmware).
+- Safe for experimentation: you can always return to GNOME if you break your Wayfire config.
 
 ---
 
