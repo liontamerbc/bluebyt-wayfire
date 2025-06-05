@@ -184,6 +184,41 @@ else
     run "sudo pacman -S --needed --noconfirm mesa"
 fi
 
+# === Detect Wi-Fi and Bluetooth, Install Drivers and Tools ===
+header "Detecting Wi-Fi and installing drivers/tools"
+if lspci | grep -qi 'Network controller.*Broadcom'; then
+    warn "Broadcom Wi-Fi detected. You may need to install 'broadcom-wl-dkms' from the AUR for full support."
+    if confirm "Would you like to try installing broadcom-wl-dkms from AUR now?"; then
+        if ! command -v paru >/dev/null 2>&1; then
+            run "git clone https://aur.archlinux.org/paru.git"
+            cd paru || exit 1
+            run "makepkg -si --noconfirm"
+            cd .. || exit 1
+            run "rm -rf paru"
+        fi
+        run "paru -S --noconfirm broadcom-wl-dkms"
+    fi
+elif lspci | grep -qi 'Network controller.*Realtek'; then
+    warn "Realtek Wi-Fi detected. Some chipsets require extra drivers from AUR."
+    if confirm "Would you like to search for and install Realtek Wi-Fi drivers from AUR now?"; then
+        log "Please search the AUR for your specific Realtek chipset (e.g., rtl8821ce-dkms-git) and install as needed."
+        run "paru -Ss realtek"
+    fi
+fi
+
+# Always install wireless tools and firmware
+run "sudo pacman -S --needed --noconfirm linux-firmware wireless_tools networkmanager"
+
+header "Detecting Bluetooth and installing drivers/tools"
+if lsusb | grep -qi bluetooth || lspci | grep -qi bluetooth; then
+    run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
+    run "sudo systemctl enable --now bluetooth"
+else
+    # Install anyway for most laptops/desktops
+    run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
+    run "sudo systemctl enable --now bluetooth"
+fi
+
 # === System Update ===
 header "Updating system"
 run "sudo pacman -Syu --noconfirm" || fatal "System update failed."
