@@ -54,7 +54,6 @@
 ## 🖥️ Prerequisites
 
 - Arch Linux installed (minimal or with your preferred desktop environment).
-- [Install Arch Linux (video)](https://www.youtube.com/watch?v=8nlo7LewC5Q)
 
 ---
 
