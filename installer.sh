@@ -3,17 +3,27 @@
 # Exit on any error to prevent partial installations
 set -e
 
-# === Global Variables ===
-SCRIPT_DIR="$(pwd)"
-BACKUP_DIR=~/.config_backup_$(date +%F_%T)
+# === Get script's own directory, not current working directory ===
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 FAILED=false
 LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
 THEME="TokyoNight-Dark"
 INSTALL_ALL=true
 SKIP_WALLPAPERS=false
 
-# === Trap for cleanup on exit or error ===
-trap cleanup EXIT
+# === Trap for cleanup on error only ===
+cleanup() {
+    if [ "$FAILED" = true ]; then
+        echo "Installation failed. Cleaning up..." | tee -a "$LOG_FILE"
+        cd "$SCRIPT_DIR"
+        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null
+        echo "Cleanup complete. See $LOG_FILE for details."
+        echo "See $LOG_FILE for detailed installation log"
+        exit 1
+    fi
+}
+trap 'if [ "$FAILED" = true ]; then cleanup; fi' EXIT
 
 # === Command Line Options ===
 usage() {
@@ -67,32 +77,22 @@ check_version() {
 
 check_space() {
     local min_space=$1
-    local available_space=$(df -m / | tail -1 | awk '{print $4}')
+    local available_space=$(df -m "$HOME" | tail -1 | awk '{print $4}')
     if [ "$available_space" -lt "$min_space" ]; then
         log "Error: Insufficient disk space. Required: ${min_space}MB, Available: ${available_space}MB"
-        exit 1
+        FAILED=true
+        cleanup
     fi
 }
 
 install_pacman() {
     log "Installing with pacman: $*"
-    sudo pacman -S --needed --noconfirm "$@" 2>>"$LOG_FILE" || { log "Pacman install failed for $*"; FAILED=true; }
+    sudo pacman -S --needed --noconfirm "$@" 2>>"$LOG_FILE" || { log "Pacman install failed for $*"; FAILED=true; cleanup; }
 }
 
 install_aur() {
     log "Installing with paru: $*"
-    paru -S --noconfirm "$@" 2>>"$LOG_FILE" || { log "Paru install failed for $*"; FAILED=true; }
-}
-
-cleanup() {
-    if [ "$FAILED" = true ]; then
-        log "Installation failed. Cleaning up..."
-        cd "$SCRIPT_DIR"
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null
-        log "Cleanup complete. See $LOG_FILE for details."
-        echo "See $LOG_FILE for detailed installation log"
-        exit 1
-    fi
+    paru -S --noconfirm "$@" 2>>"$LOG_FILE" || { log "Paru install failed for $*"; FAILED=true; cleanup; }
 }
 
 confirm() {
@@ -115,8 +115,8 @@ confirm "Do you want to proceed with the installation?"
 log "Checking system requirements..."
 check_space 2000
 log "Verifying critical dependencies..."
-command_exists "git" && check_version "git" "2.30" || FAILED=true
-command_exists "gcc" && check_version "gcc" "10.0" || FAILED=true
+command_exists "git" && check_version "git" "2.30" || { FAILED=true; cleanup; }
+command_exists "gcc" && check_version "gcc" "10.0" || { FAILED=true; cleanup; }
 
 # === Step 2: Update System ===
 log "Updating package lists..."
@@ -144,7 +144,7 @@ if ! command_exists paru; then
     log "Installing Paru from AUR..."
     git clone https://aur.archlinux.org/paru.git || { log "Failed to clone Paru."; FAILED=true; cleanup; }
     cd paru
-    makepkg -si --noconfirm || { log "Paru build failed."; FAILED=true; cleanup; }
+    makepkg -si --noconfirm || { log "Paru build failed."; cd ..; FAILED=true; cleanup; }
     cd ..
     rm -rf paru
 else
@@ -162,8 +162,8 @@ install_pacman autoconf boost cmake doctest doxygen freetype2 glib2-devel glm \
 log "Building and installing Wayfire..."
 git clone https://github.com/WayfireWM/wayfire.git || { log "Failed to clone Wayfire."; FAILED=true; cleanup; }
 cd wayfire
-meson build --prefix=/usr --buildtype=release || { log "Meson setup failed."; FAILED=true; cleanup; }
-ninja -C build || { log "Ninja build failed."; FAILED=true; cleanup; }
+meson build --prefix=/usr --buildtype=release || { log "Meson setup failed."; cd ..; FAILED=true; cleanup; }
+ninja -C build || { log "Ninja build failed."; cd ..; FAILED=true; cleanup; }
 sudo ninja -C build install
 cd ..
 rm -rf wayfire
@@ -172,8 +172,8 @@ rm -rf wayfire
 log "Building and installing wf-shell (Wayfire shell components)..."
 git clone https://github.com/WayfireWM/wf-shell.git || { log "Failed to clone wf-shell."; FAILED=true; cleanup; }
 cd wf-shell
-meson build --prefix=/usr --buildtype=release
-ninja -C build
+meson build --prefix=/usr --buildtype=release || { log "Meson setup failed for wf-shell."; cd ..; FAILED=true; cleanup; }
+ninja -C build || { log "Ninja build failed for wf-shell."; cd ..; FAILED=true; cleanup; }
 sudo ninja -C build install
 cd ..
 rm -rf wf-shell
@@ -182,8 +182,8 @@ rm -rf wf-shell
 log "Building and installing wcm (Wayfire Config Manager)..."
 git clone https://github.com/WayfireWM/wcm.git || { log "Failed to clone wcm."; FAILED=true; cleanup; }
 cd wcm
-meson build --prefix=/usr --buildtype=release || { log "Meson setup failed for wcm."; FAILED=true; cleanup; }
-ninja -C build || { log "Ninja build failed for wcm."; FAILED=true; cleanup; }
+meson build --prefix=/usr --buildtype=release || { log "Meson setup failed for wcm."; cd ..; FAILED=true; cleanup; }
+ninja -C build || { log "Ninja build failed for wcm."; cd ..; FAILED=true; cleanup; }
 sudo ninja -C build install
 cd ..
 rm -rf wcm
@@ -208,15 +208,10 @@ if [ -f "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" ]; then
     log "Found Aretha-Dark-Icons.tar.gz in $SCRIPT_DIR, using it..."
     cp "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" . 2>>"$LOG_FILE" || { log "Failed to copy Aretha-Dark-Icons.tar.gz"; FAILED=true; cleanup; }
 elif [ ! -d "Aretha-Dark-Icons" ]; then
-    log "Aretha-Dark-Icons.tar.gz not found in $SCRIPT_DIR. Attempting to download (this may fail)..."
-    ARETHA_URL="https://dl.opendesktop.org/api/files/download/id/<some-id>/Aretha-Dark-Icons.tar.gz"
-    if ! curl -L -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$ARETHA_URL" -o Aretha-Dark-Icons.tar.gz 2>>"$LOG_FILE"; then
-        log "Error: Failed to download Aretha-Dark-Icons from $ARETHA_URL."
-        log "Please manually download Aretha-Dark-Icons.tar.gz from https://www.gnome-look.org/p/2180417 (Files tab),"
-        log "place it in $SCRIPT_DIR, and rerun the script."
-        FAILED=true
-        cleanup
-    fi
+    log "Aretha-Dark-Icons.tar.gz not found in $SCRIPT_DIR. Please download it manually from https://www.gnome-look.org/p/2180417 (Files tab),"
+    log "place it in $SCRIPT_DIR, and rerun the script."
+    FAILED=true
+    cleanup
 fi
 if [ -f Aretha-Dark-Icons.tar.gz ]; then
     tar -xzf Aretha-Dark-Icons.tar.gz || { log "Failed to extract Aretha-Dark-Icons."; FAILED=true; cleanup; }
@@ -240,15 +235,22 @@ log "Installing system tools: exa, Fish, mako, swappy..."
 install_pacman exa fish mako swappy
 
 confirm "Do you want to set Fish as your default shell?"
-log "Setting Fish as the default shell..."
-if ! grep -qx "/usr/bin/fish" /etc/shells; then
-    echo "/usr/bin/fish" | sudo tee -a /etc/shells
+set_fish=false
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    set_fish=true
 fi
-chsh -s /usr/bin/fish
+
+if [ "$set_fish" = true ]; then
+    log "Setting Fish as the default shell..."
+    if ! grep -qx "/usr/bin/fish" /etc/shells; then
+        echo "/usr/bin/fish" | sudo tee -a /etc/shells
+    fi
+    chsh -s /usr/bin/fish
+fi
 
 log "Installing Zed editor..."
 if ! command_exists "zed"; then
-    curl -f https://zed.dev/install.sh | sh 2>>"$LOG_FILE" || { log "Failed to install Zed editor."; FAILED=true; }
+    curl -fsSL https://zed.dev/install.sh | sh 2>>"$LOG_FILE" || { log "Failed to install Zed editor."; FAILED=true; }
     if command_exists "zed"; then
         log "Zed editor installed successfully: $(zed --version)"
     else
@@ -446,4 +448,6 @@ echo "1. Log out of your current session."
 echo "2. At your login manager, select the 'Wayfire' session."
 echo "3. Log in and enjoy your new desktop environment!"
 echo "Backup of previous config saved to: $BACKUP_DIR"
-echo "Note: Fish shell is now set as default."
+if [ "$set_fish" = true ]; then
+    echo "Note: Fish shell is now set as default."
+fi
