@@ -55,7 +55,7 @@ cleanup() {
     if [[ "$FAILED" == "true" ]]; then
         warn "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR" || exit 1
-        rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null || true
+        rm -rf wayfire wf-shell wcm pixdecor paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null || true
         warn "Cleanup complete. See $LOG_FILE for details."
         echo "See $LOG_FILE for detailed installation log"
     fi
@@ -214,6 +214,7 @@ build_git_pkg() {
 build_git_pkg "https://github.com/WayfireWM/wayfire.git" "wayfire"
 build_git_pkg "https://github.com/WayfireWM/wf-shell.git" "wf-shell"
 build_git_pkg "https://github.com/WayfireWM/wcm.git" "wcm"
+build_git_pkg "https://github.com/soreau/pixdecor.git" "pixdecor"
 
 # === Desktop Utilities ===
 header "Installing desktop utilities"
