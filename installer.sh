@@ -4,7 +4,7 @@
 set -e
 
 # === Global Variables ===
-SCRIPT_DIR="$(pwd)"  # This will be $HOME/bluebyt-wayfire since you've cd'ed there
+SCRIPT_DIR="$(pwd)"
 BACKUP_DIR=~/.config_backup_$(date +%F_%T)
 FAILED=false
 LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
@@ -12,13 +12,25 @@ THEME="TokyoNight-Dark"
 INSTALL_ALL=true
 SKIP_WALLPAPERS=false
 
+# === Trap for cleanup on exit or error ===
+trap cleanup EXIT
+
 # === Command Line Options ===
-while getopts ":t:pw" opt; do
+usage() {
+    echo "Usage: $0 [-t theme] [-p] [-w] [-h]"
+    echo "  -t THEME     Set GTK theme (default: TokyoNight-Dark)"
+    echo "  -p           Partial install, skip optional AUR packages"
+    echo "  -w           Skip wallpaper installation"
+    echo "  -h           Show this help message"
+    exit 1
+}
+while getopts ":t:pwh" opt; do
     case $opt in
         t) THEME="$OPTARG";;
         p) INSTALL_ALL=false;;
         w) SKIP_WALLPAPERS=true;;
-        \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
+        h) usage;;
+        \?) echo "Invalid option -$OPTARG" >&2; usage;;
     esac
 done
 
@@ -63,13 +75,13 @@ check_space() {
 }
 
 install_pacman() {
-    log "Installing with pacman: $@"
-    sudo pacman -S --needed --noconfirm "$@" 2>>"$LOG_FILE" || { log "Pacman install failed for $@"; FAILED=true; }
+    log "Installing with pacman: $*"
+    sudo pacman -S --needed --noconfirm "$@" 2>>"$LOG_FILE" || { log "Pacman install failed for $*"; FAILED=true; }
 }
 
 install_aur() {
-    log "Installing with paru: $@"
-    paru -S --noconfirm "$@" 2>>"$LOG_FILE" || { log "Paru install failed for $@"; FAILED=true; }
+    log "Installing with paru: $*"
+    paru -S --noconfirm "$@" 2>>"$LOG_FILE" || { log "Paru install failed for $*"; FAILED=true; }
 }
 
 cleanup() {
@@ -78,6 +90,7 @@ cleanup() {
         cd "$SCRIPT_DIR"
         rm -rf wayfire wf-shell wcm paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null
         log "Cleanup complete. See $LOG_FILE for details."
+        echo "See $LOG_FILE for detailed installation log"
         exit 1
     fi
 }
@@ -95,7 +108,7 @@ confirm() {
 log "Welcome to the Wayfire Desktop Environment Installer for Arch Linux!"
 log "Selected theme: $THEME"
 log "Full installation: $INSTALL_ALL"
-log "Install wallpapers: $((! $SKIP_WALLPAPERS))"
+log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
 confirm "Do you want to proceed with the installation?"
 
 # === Step 1: Pre-flight Checks ===
@@ -165,7 +178,7 @@ sudo ninja -C build install
 cd ..
 rm -rf wf-shell
 
-# === Step 9b: Build and Install wcm (Wayfire Config Manager) ===
+# === Step 10: Build and Install wcm (Wayfire Config Manager) ===
 log "Building and installing wcm (Wayfire Config Manager)..."
 git clone https://github.com/WayfireWM/wcm.git || { log "Failed to clone wcm."; FAILED=true; cleanup; }
 cd wcm
@@ -175,14 +188,16 @@ sudo ninja -C build install
 cd ..
 rm -rf wcm
 
-# === Step 10: Install Desktop Utilities ===
+# === Step 11: Install Desktop Utilities ===
 log "Installing desktop utilities..."
 install_pacman polkit-gnome networkmanager
 sudo systemctl enable NetworkManager
 
-# === Step 11: Install Themes and Icons ===
+# === Step 12: Install Themes and Icons ===
 log "Installing $THEME GTK Theme..."
-git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git || { log "Failed to clone theme."; FAILED=true; cleanup; }
+if [ ! -d "$SCRIPT_DIR/Tokyo-Night-GTK-Theme" ]; then
+    git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git || { log "Failed to clone theme."; FAILED=true; cleanup; }
+fi
 cd Tokyo-Night-GTK-Theme/themes
 ./install.sh -d ~/.local/share/themes -c dark -l --tweaks black 2>>"$LOG_FILE"
 cd ../..
@@ -192,9 +207,8 @@ log "Installing Aretha-Dark-Icons..."
 if [ -f "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" ]; then
     log "Found Aretha-Dark-Icons.tar.gz in $SCRIPT_DIR, using it..."
     cp "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" . 2>>"$LOG_FILE" || { log "Failed to copy Aretha-Dark-Icons.tar.gz"; FAILED=true; cleanup; }
-else
+elif [ ! -d "Aretha-Dark-Icons" ]; then
     log "Aretha-Dark-Icons.tar.gz not found in $SCRIPT_DIR. Attempting to download (this may fail)..."
-    # Fallback URL (replace with actual URL if known, otherwise this is a placeholder likely to fail)
     ARETHA_URL="https://dl.opendesktop.org/api/files/download/id/<some-id>/Aretha-Dark-Icons.tar.gz"
     if ! curl -L -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$ARETHA_URL" -o Aretha-Dark-Icons.tar.gz 2>>"$LOG_FILE"; then
         log "Error: Failed to download Aretha-Dark-Icons from $ARETHA_URL."
@@ -204,27 +218,34 @@ else
         cleanup
     fi
 fi
-tar -xzf Aretha-Dark-Icons.tar.gz || { log "Failed to extract Aretha-Dark-Icons."; FAILED=true; cleanup; }
+if [ -f Aretha-Dark-Icons.tar.gz ]; then
+    tar -xzf Aretha-Dark-Icons.tar.gz || { log "Failed to extract Aretha-Dark-Icons."; FAILED=true; cleanup; }
+    rm -f Aretha-Dark-Icons.tar.gz
+fi
 mkdir -p ~/.local/share/icons
-mv Aretha-Dark-Icons ~/.local/share/icons/ || { log "Failed to move Aretha-Dark-Icons to ~/.local/share/icons/"; FAILED=true; cleanup; }
-rm -f Aretha-Dark-Icons.tar.gz
+if [ -d Aretha-Dark-Icons ]; then
+    mv Aretha-Dark-Icons ~/.local/share/icons/ || { log "Failed to move Aretha-Dark-Icons to ~/.local/share/icons/"; FAILED=true; cleanup; }
+fi
 
 log "Applying theme and icons..."
 mkdir -p ~/.config/gtk-3.0
-echo "[Settings]
+cat > ~/.config/gtk-3.0/settings.ini <<EOF
+[Settings]
 gtk-theme-name=$THEME
-gtk-icon-theme-name=Aretha-Dark-Icons" > ~/.config/gtk-3.0/settings.ini
+gtk-icon-theme-name=Aretha-Dark-Icons
+EOF
 
-# === Step 12: Install System Tools including exa, Fish, and Zed ===
+# === Step 13: Install System Tools including exa, Fish, and Zed ===
 log "Installing system tools: exa, Fish, mako, swappy..."
 install_pacman exa fish mako swappy
 
 confirm "Do you want to set Fish as your default shell?"
 log "Setting Fish as the default shell..."
-echo "/usr/bin/fish" | sudo tee -a /etc/shells
+if ! grep -qx "/usr/bin/fish" /etc/shells; then
+    echo "/usr/bin/fish" | sudo tee -a /etc/shells
+fi
 chsh -s /usr/bin/fish
 
-# Install Zed editor
 log "Installing Zed editor..."
 if ! command_exists "zed"; then
     curl -f https://zed.dev/install.sh | sh 2>>"$LOG_FILE" || { log "Failed to install Zed editor."; FAILED=true; }
@@ -238,7 +259,7 @@ else
     log "Zed editor is already installed: $(zed --version)"
 fi
 
-# === Step 13: Install packages from AUR ===
+# === Step 14: Install packages from AUR ===
 if [ "$INSTALL_ALL" = true ]; then
     log "Installing packages from AUR..."
     install_aur eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout
@@ -246,7 +267,7 @@ else
     log "Skipping optional AUR packages (eww, ironbar) due to partial install"
 fi
 
-# === Step 14: Backup and Copy Configuration Files and Binaries ===
+# === Step 15: Backup and Copy Configuration Files and Binaries ===
 log "Backing up existing configuration..."
 mkdir -p "$BACKUP_DIR"
 cp -r "$HOME/.config" "$BACKUP_DIR/" 2>/dev/null || true
@@ -286,7 +307,7 @@ else
     FAILED=true
 fi
 
-# === Step 14b: Copy Wallpapers ===
+# === Step 16: Copy Wallpapers ===
 if [ "$SKIP_WALLPAPERS" != "true" ]; then
     log "Setting up wallpapers from current bluebyt-wayfire directory..."
     WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpaper"
@@ -318,10 +339,9 @@ else
     log "Skipping wallpaper installation as per user request (-w flag)"
 fi
 
-# === Step 14c: Configure Follow Focus and Inactive-Alpha ===
+# === Step 17: Configure Follow Focus and Inactive-Alpha ===
 log "Configuring follow-focus and inactive-alpha for Wayfire..."
 
-# Set environment variable
 mkdir -p "$HOME/.config/environment.d"
 echo "WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket" > "$HOME/.config/environment.d/environment.conf"
 if [ $? -eq 0 ]; then
@@ -331,11 +351,9 @@ else
     FAILED=true
 fi
 
-# Copy or download IPC scripts
 IPC_DIR="$HOME/.config/ipc-scripts"
 mkdir -p "$IPC_DIR"
 
-# Option 1: Copy from SCRIPT_DIR if scripts are included locally
 if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" ]; then
     cp "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" "$IPC_DIR/" 2>>"$LOG_FILE"
     cp "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" "$IPC_DIR/" 2>>"$LOG_FILE"
@@ -346,7 +364,6 @@ if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-s
         FAILED=true
     fi
 else
-    # Option 2: Download from Wayfire GitHub (assuming they’re in the examples directory)
     log "IPC scripts not found in $SCRIPT_DIR/ipc-scripts/, attempting to download from Wayfire GitHub..."
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py" -o "$IPC_DIR/inactive-alpha.py" 2>>"$LOG_FILE" || { log "Failed to download inactive-alpha.py"; FAILED=true; }
     curl -fL "https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py" -o "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE" || { log "Failed to download wayfire_socket.py"; FAILED=true; }
@@ -358,7 +375,6 @@ else
     fi
 fi
 
-# Ensure scripts are executable
 chmod +x "$IPC_DIR/inactive-alpha.py" "$IPC_DIR/wayfire_socket.py" 2>>"$LOG_FILE"
 if [ $? -eq 0 ]; then
     log "Made IPC scripts executable"
@@ -367,16 +383,13 @@ else
     FAILED=true
 fi
 
-# Modify wayfire.ini
 WAYFIRE_INI="$HOME/.config/wayfire.ini"
 if [ -f "$WAYFIRE_INI" ]; then
-    # Check if plugins line exists and modify it, or append it
     if grep -q "^plugins =" "$WAYFIRE_INI"; then
         sed -i "s/^plugins =.*/plugins = ipc ipc-rules follow-focus/" "$WAYFIRE_INI" 2>>"$LOG_FILE"
     else
         echo "plugins = ipc ipc-rules follow-focus" >> "$WAYFIRE_INI"
     fi
-    # Check if [autostart] exists and append launcher, or create section
     if grep -q "^\[autostart\]" "$WAYFIRE_INI"; then
         if ! grep -q "launcher =" "$WAYFIRE_INI"; then
             sed -i "/^\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py" "$WAYFIRE_INI" 2>>"$LOG_FILE"
@@ -401,7 +414,7 @@ else
     fi
 fi
 
-# === Step 15: Ensure wayfire.desktop is present ===
+# === Step 18: Ensure wayfire.desktop is present ===
 if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
     log "Creating wayfire.desktop..."
     sudo tee /usr/share/wayland-sessions/wayfire.desktop <<EOF
@@ -413,7 +426,7 @@ Type=Application
 EOF
 fi
 
-# === Step 16: Verify Installations ===
+# === Step 19: Verify Installations ===
 log "Verifying key installations..."
 for cmd in wayfire kitty fish zed wcm xava wlogout; do
     if command_exists "$cmd"; then
@@ -424,8 +437,7 @@ for cmd in wayfire kitty fish zed wcm xava wlogout; do
     fi
 done
 
-# === Step 17: Cleanup and Final Instructions ===
-cleanup
+# === Step 20: Final Instructions ===
 log "Installation complete!"
 echo "Installation complete!"
 echo "See $LOG_FILE for detailed installation log"
