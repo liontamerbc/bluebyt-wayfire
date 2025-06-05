@@ -1,155 +1,131 @@
-# Bluebyt Wayfire Desktop Dots
+# bluebyt-wayfire Desktop Installer for Arch Linux
 
-**Wayfire-dots** is a complete, elegant, and highly customizable desktop setup for the [Wayfire](https://github.com/WayfireWM/wayfire) 3D Wayland compositor. This project delivers a beautiful workflow, curated themes, and a suite of tools for power users and Linux enthusiasts.
-
----
-
-## ✨ Features
-
-- **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers (CPU, GPU, Wi-Fi, Bluetooth), utilities, and configurations.
-- **Universal Config Paths:** Uses environment-agnostic placeholders in config files for seamless portability.
-- **Automatic Wallpapers & Dotfiles:** Installs wallpapers and dotfiles to proper system locations.
-- **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
-- **Actively Maintained:** Regularly updated with new features and improvements.
+A robust, user-friendly, and auditable installer for the bluebyt-wayfire desktop environment on **Arch Linux** and derivatives.  
+This script supports both interactive and automated installations, with optional GNOME fallback and comprehensive hardware/configuration handling.
 
 ---
 
-## 📸 Screenshots
+## Features
 
-**Wayfire with Pixdecor**
-
-![Wayfire with Pixdecor](https://github.com/user-attachments/assets/6ce465da-e8a9-45d5-a87c-8932cd7ae366)
-
-**GTK4 Apps, Aretha-Dark-Icons, and Pixdecor**
-
-![GTK4, Pixdecor](https://github.com/user-attachments/assets/58606e37-6f79-4ad9-b1cf-20cef66b1213)
-
-[▶️ Install Wayfire on Youtube](https://youtu.be/abtU54uMXH0)
-
----
-
-## 🧩 Included Components
-
-- [Wayfire](https://github.com/WayfireWM/wayfire) – 3D Wayland compositor
-- [Pixdecor](https://github.com/soreau/pixdecor) – Antialiased window decorations
-- [Ironbar](https://github.com/JakeStanger/ironbar) – Powerful GTK status bar
-- [eww](https://github.com/elkowar/eww) – Interactive widgets (left panel)
-- [Mako](https://github.com/emersion/mako) – Notification daemon
-- [Tokyonight-Dark](https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme) – GTK theme
-- [Tela-circle-icon-theme](https://github.com/vinceliuice/Tela-circle-icon-theme) or [Aretha-Dark-Icons](https://www.gnome-look.org/p/2180417)
-- [Fish shell](https://github.com/fish-shell/fish-shell) & [Starship](https://starship.rs/) prompt
-- [Catnip](https://github.com/iinsertNameHere/catnip) – System fetch tool
-- [SwayOSD](https://github.com/ErikReider/SwayOSD) – On-screen display
-- [Lite XL](https://lite-xl.com/) – Lightweight extensible text editor
-- [Ulauncher](https://ulauncher.io/) – Application launcher
-- [Grimshot-pv](https://github.com/ferdiebergado/grimshot-pv) – Screenshot preview
-- [Xava](https://github.com/nikp123/xava) – Audio visualizer
-- [ncmpcpp](https://github.com/ncmpcpp/ncmpcpp) – Terminal music player
-- [Swappy](https://github.com/jtheoof/swappy) – Wayland snapshot & editor
-- **Font:** Caskaydiacove Nerd Font
+- 🖥️ **Wayfire, wf-shell, wcm, and pixdecor** – Built from latest sources
+- 🎨 **TokyoNight-Dark GTK theme** and **Aretha-Dark-Icons**
+- 🗂 **Config and dotfiles** management
+- 🦾 **Optional GNOME desktop install** for fallback/troubleshooting
+- 🛠️ **Automatic driver and firmware install** (Intel, AMD, NVIDIA, Realtek, Broadcom, Bluetooth, etc.)
+- 🌐 **NetworkManager**, **bluetooth**, and other desktop utilities
+- 🐟 **Fish shell** (optionally set as default), **starship** prompt integration
+- 🖼️ **Wallpaper** support
+- ⚙️ **AUR helper (paru)** bootstrapping, AUR packages (optional)
+- 📝 **Dry-run mode** and **non-interactive mode** (`--yes`)
+- 🛡 **Automatic backup** of previous configs
+- 🧹 **Cleanup on failure**
+- ✅ **Final verification and helpful summary**
 
 ---
 
-## 🖥️ Prerequisites
-
-- Arch Linux installed (minimal or with your preferred desktop environment).
-- [Install Arch Linux (video)](https://www.youtube.com/watch?v=8nlo7LewC5Q)
-
----
-
-## 🚀 Quick Start
-
-**Recommended: Automated Installer**
+## Usage
 
 ```sh
-git clone https://github.com/liontamerbc/bluebyt-wayfire.git
-cd bluebyt-wayfire
+./installer.sh [options]
+```
+
+### Options
+
+| Option            | Description                                                         |
+|-------------------|---------------------------------------------------------------------|
+| `-t THEME`        | Set GTK theme (default: TokyoNight-Dark)                            |
+| `-p`              | Partial install, skip optional AUR packages                         |
+| `-w`              | Skip wallpaper installation                                         |
+| `-n`              | Dry-run: show actions, do not change system                         |
+| `-g`, `--gnome`   | **Install GNOME desktop before Wayfire**                            |
+| `-y`, `--yes`     | Answer yes to all prompts (non-interactive, for automation/scripts) |
+| `-h`              | Show help message                                                   |
+
+---
+
+## Example
+
+**Just Wayfire (default theme):**
+```sh
 ./installer.sh
 ```
 
-The installer guides you through all steps, including configs, themes, wallpapers, and now automatically detects and installs CPU microcode, GPU drivers, Wi-Fi, and Bluetooth support for most hardware.
+**With GNOME fallback:**
+```sh
+./installer.sh -g
+# or
+./installer.sh --gnome
+```
+
+**Non-interactive full install with custom theme:**
+```sh
+./installer.sh -g -y -t Adwaita-dark
+```
+
+**Dry-run preview:**
+```sh
+./installer.sh -n
+```
 
 ---
 
-## 📝 Manual Installation
+## Why Install GNOME First?
 
-Although the installer automates most hardware detection and driver installation, here is a summary of what it does for reference:
+Installing GNOME before Wayfire is **strongly recommended** for most users, especially on a fresh Arch Linux setup, for several reasons:
 
-### 1. Install Dependencies
-
-Including build tools, libraries, and core packages for Wayfire and all included utilities.
-
-### 2. Build and Install Wayfire, wf-shell, wcm, and Pixdecor
-
-Clones and builds from source:
-- [Wayfire](https://github.com/WayfireWM/wayfire)
-- [wf-shell](https://github.com/WayfireWM/wf-shell)
-- [wcm](https://github.com/WayfireWM/wcm)
-- [Pixdecor](https://github.com/soreau/pixdecor)
-
-### 3. Install GPU, CPU, Wi-Fi, and Bluetooth Drivers
-
-- Detects Intel/AMD CPUs and installs microcode.
-- Detects NVIDIA, AMD, or Intel GPUs and installs the appropriate drivers.
-- Detects common Broadcom/Realtek Wi-Fi chipsets and guides AUR driver installation if needed.
-- Installs `networkmanager`, `wireless_tools`, and `linux-firmware`.
-- Installs `bluez` and `bluez-utils`, and enables Bluetooth.
-
-### 4. Theme, Icons, and Configurations
-
-- Installs your chosen GTK theme and icon set.
-- Applies theme and icons via config.
-- Copies all config files, scripts, and dotfiles to your home directory.
+1. **Reliable Fallback:** GNOME provides a stable desktop for troubleshooting if Wayfire fails to start or you encounter hardware/configuration issues.
+2. **Easier Troubleshooting:** GNOME includes graphical tools for managing network, bluetooth, drivers, display settings, etc.
+3. **Automatic Hardware Support:** GNOME brings in a wide array of drivers, firmware, and utilities for better hardware compatibility.
+4. **Smooth User Experience:** GNOME sets up user accounts, permissions, and session management, reducing headaches.
+5. **Safe Experimentation:** With GNOME as a backup, you can freely experiment with Wayfire knowing you can always log into a working desktop.
 
 ---
 
-## ⚙️ Configuration
+## Requirements
 
-- Configs are stored in `$HOME/.config/wayfire.ini` and `$HOME/.config/wf-shell.ini`.
-- The installer will back up your existing configs.
-
----
-
-## ▶️ Usage
-
-1. Log out of your current session.
-2. At your login manager (e.g., GDM), select the "Wayfire" session.
-3. Log in and enjoy your new desktop environment!
+- Arch Linux or derivative (Manjaro, EndeavourOS, etc.)
+- Internet connection
+- `sudo` privileges
+- ~2GB available disk space
 
 ---
 
-## 🎨 Advanced: Follow Focus & Inactive Alpha
+## Notes
 
-These features are now fully automated by the installer:
-
-- Sets up the required environment variable.
-- Downloads and configures `inactive-alpha.py` and `wayfire_socket.py`.
-- Updates your `wayfire.ini` with the correct plugins and autostart entries.
-- Makes all scripts executable.
-
-No manual action required.
+- **Aretha-Dark-Icons:** Download `Aretha-Dark-Icons.tar.gz` from [gnome-look.org](https://www.gnome-look.org/p/2180417) and place it in the same directory as the script before running.
+- **Wallpaper:** Place wallpapers in a `Wallpaper` subdirectory next to the script, if desired.
+- **Custom dotfiles:** Place your `.config` and `.bin` in the script directory for copying, or edit the script for alternate sources.
 
 ---
 
-## 🙏 Credits & Resources
+## FAQ
 
-- [Bluebyt (Bruno) – Workflow video](https://youtu.be/5dzgKCZbSlA)
-- [`@bluebyt/Wayfire-dots.git`](https://github.com/bluebyt/Wayfire-dots.git)
-- [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for more documentation and troubleshooting.
+**Q: Does this set screen resolution automatically?**  
+A: No, Wayfire will auto-detect most displays, but you may need to use `wcm` (Wayfire Config Manager) to set resolution and scaling.
 
----
+**Q: Do I need to install GNOME?**  
+A: Not required, but highly recommended for troubleshooting and fallback, especially on fresh installs.
 
-## 💬 Support & Feedback
+**Q: What does dry-run do?**  
+A: It prints all actions the script would take, but makes no changes—great for previewing.
 
-- Open an issue or pull request on this repository for bugs, feature requests, or improvements.
-- Contributions are welcome!
-
----
-
-## 🔗 License
-
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+**Q: Is this script idempotent?**  
+A: It backs up existing configs and removes build directories as needed, but always review and understand changes for your system.
 
 ---
 
-Enjoy your new Wayfire desktop!
+## Troubleshooting
+
+- If you experience issues, review the log file (e.g., `install_wayfire_2025-06-05_15:23:30.log`).
+- For driver/firmware issues, refer to the script’s output and Arch Wiki.
+- If you end up with a black screen after login, use GNOME or a TTY to fix configs.
+
+---
+
+## License
+
+MIT (see `LICENSE` file)
+
+---
+
+**Enjoy your bluebyt-wayfire experience!**
