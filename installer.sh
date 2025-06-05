@@ -164,6 +164,26 @@ require_bin git 2.30
 require_bin gcc 10.0
 require_bin curl ""
 
+# === Detect CPU and GPU, Install Microcode and Drivers ===
+header "Detecting CPU and installing microcode"
+if grep -qi 'GenuineIntel' /proc/cpuinfo; then
+    run "sudo pacman -S --needed --noconfirm intel-ucode"
+elif grep -qi 'AuthenticAMD' /proc/cpuinfo; then
+    run "sudo pacman -S --needed --noconfirm amd-ucode"
+fi
+
+header "Detecting GPU and installing drivers"
+GPU_VENDOR=$(lspci | grep -E 'VGA|3D' | head -n1)
+if echo "$GPU_VENDOR" | grep -qi 'NVIDIA'; then
+    run "sudo pacman -S --needed --noconfirm nvidia nvidia-utils"
+elif echo "$GPU_VENDOR" | grep -qi 'AMD'; then
+    run "sudo pacman -S --needed --noconfirm xf86-video-amdgpu mesa vulkan-radeon"
+elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
+    run "sudo pacman -S --needed --noconfirm mesa vulkan-intel"
+else
+    run "sudo pacman -S --needed --noconfirm mesa"
+fi
+
 # === System Update ===
 header "Updating system"
 run "sudo pacman -Syu --noconfirm" || fatal "System update failed."
