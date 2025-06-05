@@ -6,7 +6,7 @@
 
 ## ✨ Features
 
-- **One-Click Installer:** Automates setup on Arch Linux, including dependencies, utilities, and all configurations.
+- **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers (CPU, GPU, Wi-Fi, Bluetooth), utilities, and configurations.
 - **Universal Config Paths:** Uses environment-agnostic placeholders in config files for seamless portability.
 - **Automatic Wallpapers & Dotfiles:** Installs wallpapers and dotfiles to proper system locations.
 - **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
@@ -67,35 +67,39 @@ cd bluebyt-wayfire
 ./installer.sh
 ```
 
-The installer guides you through all steps, including configs, themes, and wallpapers.
+The installer guides you through all steps, including configs, themes, wallpapers, and now automatically detects and installs CPU microcode, GPU drivers, Wi-Fi, and Bluetooth support for most hardware.
 
 ---
 
 ## 📝 Manual Installation
 
+Although the installer automates most hardware detection and driver installation, here is a summary of what it does for reference:
+
 ### 1. Install Dependencies
 
-```sh
-sudo pacman -S freetype2 glm libdrm libevdev libgl libinput libjpeg libpng libxkbcommon libxml2 pixman wayland-protocols wlroots meson cmake doctest doxygen nlohmann-json libnotify base-devel pkg-config
-```
+Including build tools, libraries, and core packages for Wayfire and all included utilities.
 
-### 2. Build and Install Wayfire
+### 2. Build and Install Wayfire, wf-shell, wcm, and Pixdecor
 
-```sh
-git clone https://github.com/WayfireWM/wf-install
-cd wf-install
-./install.sh --prefix /opt/wayfire --stream master
-```
+Clones and builds from source:
+- [Wayfire](https://github.com/WayfireWM/wayfire)
+- [wf-shell](https://github.com/WayfireWM/wf-shell)
+- [wcm](https://github.com/WayfireWM/wcm)
+- [Pixdecor](https://github.com/soreau/pixdecor)
 
-### 3. Install Pixdecor
+### 3. Install GPU, CPU, Wi-Fi, and Bluetooth Drivers
 
-```sh
-git clone https://github.com/soreau/pixdecor.git
-cd pixdecor
-PKG_CONFIG_PATH=/opt/wayfire/lib/pkgconfig meson setup build --prefix=/opt/wayfire
-ninja -C build
-ninja -C build install
-```
+- Detects Intel/AMD CPUs and installs microcode.
+- Detects NVIDIA, AMD, or Intel GPUs and installs the appropriate drivers.
+- Detects common Broadcom/Realtek Wi-Fi chipsets and guides AUR driver installation if needed.
+- Installs `networkmanager`, `wireless_tools`, and `linux-firmware`.
+- Installs `bluez` and `bluez-utils`, and enables Bluetooth.
+
+### 4. Theme, Icons, and Configurations
+
+- Installs your chosen GTK theme and icon set.
+- Applies theme and icons via config.
+- Copies all config files, scripts, and dotfiles to your home directory.
 
 ---
 
@@ -116,31 +120,22 @@ ninja -C build install
 
 ## 🎨 Advanced: Follow Focus & Inactive Alpha
 
-1. Create the environment config file:
-    ```sh
-    echo 'WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket' > ~/.config/environment.d/environment.conf
-    ```
-2. Download [inactive-alpha.py](https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py) and [wayfire_socket.py](https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py) to `~/.config/ipc-scripts`.
-3. Edit your `$HOME/.config/wayfire.ini`:
+These features are now fully automated by the installer:
 
-    ```
-    plugins = ipc ipc-rules follow-focus
-    [autostart]
-    launcher = ~/.config/ipc-scripts/inactive-alpha.py
-    ```
+- Sets up the required environment variable.
+- Downloads and configures `inactive-alpha.py` and `wayfire_socket.py`.
+- Updates your `wayfire.ini` with the correct plugins and autostart entries.
+- Makes all scripts executable.
 
-4. Make scripts executable:
-    ```sh
-    chmod +x ~/.config/ipc-scripts/inactive-alpha.py ~/.config/ipc-scripts/wayfire_socket.py
-    ```
+No manual action required.
 
 ---
 
 ## 🙏 Credits & Resources
 
 - [Bluebyt (Bruno) – Workflow video](https://youtu.be/5dzgKCZbSlA)
-- [`@bluebyt/Wayfire-dots.git`](https://github.com/bluebyt/Wayfire-dots.git)
 - [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for more documentation and troubleshooting.
+- [`@bluebyt/Wayfire-dots.git`](https://github.com/bluebyt/Wayfire-dots.git)
 
 ---
 
