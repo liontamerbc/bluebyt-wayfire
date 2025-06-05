@@ -3,7 +3,7 @@
 ################################################################################
 # bluebyt-wayfire Desktop Installer for Arch Linux
 # Maintainer: liontamerbc
-# Version: 2.0.0
+# Version: 2.1.0
 #
 # - Robust, user-friendly, and auditable installer
 # - Adheres to best practices for user safety, logging, and maintainability
@@ -16,18 +16,21 @@
 #   -p           Partial install, skip optional AUR packages
 #   -w           Skip wallpaper installation
 #   -n           Dry-run: show actions, do not change system
+#   -g, --gnome  Install GNOME Desktop before Wayfire
+#   -y, --yes    Answer yes to all prompts (non-interactive, for automation)
 #   -h           Show this help message
 ################################################################################
 
 set -euo pipefail
 
 # === Script Metadata ===
-SCRIPT_VERSION="2.0.0"
+SCRIPT_VERSION="2.1.0"
 SCRIPT_NAME="$(basename "$0")"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
 FAILED=false
 DRY_RUN=false
+AUTO_YES=false
 
 # === Colors for Logging ===
 RED='\033[0;31m'
@@ -40,7 +43,7 @@ NC='\033[0m' # No Color
 THEME="TokyoNight-Dark"
 INSTALL_ALL=true
 SKIP_WALLPAPERS=false
-
+INSTALL_GNOME=false
 BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 
 # === Logging Functions ===
@@ -55,7 +58,7 @@ cleanup() {
     if [[ "$FAILED" == "true" ]]; then
         warn "Installation failed. Cleaning up..."
         cd "$SCRIPT_DIR" || exit 1
-        rm -rf wayfire wf-shell wcm pixdecor paru Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null || true
+        rm -rf wayfire wf-shell wcm pixdecor Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null || true
         warn "Cleanup complete. See $LOG_FILE for details."
         echo "See $LOG_FILE for detailed installation log"
     fi
@@ -67,27 +70,61 @@ usage() {
     cat <<EOF
 $SCRIPT_NAME v$SCRIPT_VERSION - Installs bluebyt-wayfire desktop environment
 
-Usage: $SCRIPT_NAME [-t theme] [-p] [-w] [-n] [-h]
+Usage: $SCRIPT_NAME [-t theme] [-p] [-w] [-n] [-g|--gnome] [-y|--yes] [-h]
   -t THEME     Set GTK theme (default: TokyoNight-Dark)
   -p           Partial install, skip optional AUR packages
   -w           Skip wallpaper installation
   -n           Dry-run: show what would be done, do not change system
+  -g, --gnome  Install GNOME desktop before Wayfire
+  -y, --yes    Answer yes to all prompts (non-interactive, for automation)
   -h           Show this help message
+
+Why might you want to install GNOME first?
+
+  Installing GNOME before Wayfire is strongly recommended for most users, especially on a fresh Arch Linux setup, for several important reasons:
+
+    1. Reliable Fallback: If your Wayfire session encounters problems (such as hardware compatibility, driver issues, or misconfigurations), GNOME provides a stable and mature desktop environment you can always log into for troubleshooting and recovery.
+
+    2. Easier Troubleshooting: GNOME includes graphical tools for managing your system (network, bluetooth, drivers, display settings, etc.). If Wayfire fails to launch or you get a black screen, you can log into GNOME and fix issues without needing to work purely from a TTY or command line.
+
+    3. Automatic Hardware Support: Installing GNOME pulls in a wide array of drivers, firmware, and utilities, improving the chances that your hardware (Wi-Fi, Bluetooth, graphics, input devices) will work out-of-the-box.
+
+    4. Smooth User Experience: GNOME sets up user accounts, permissions, and systemd session management automatically. This reduces configuration headaches and ensures user sessions work properly.
+
+    5. Safe Experimentation: With GNOME available as a backup, you can freely experiment with Wayfire and customizations knowing you can always return to a "known good" desktop.
+
+  In summary: Installing GNOME first makes your system more robust, easier to manage, and much less likely to leave you with an unusable desktop if something goes wrong with Wayfire.
 EOF
     exit 0
 }
 
 # === Command Line Parsing ===
-while getopts ":t:pwnh" opt; do
+while getopts ":t:pwnghy" opt; do
     case "$opt" in
         t) THEME="$OPTARG";;
         p) INSTALL_ALL=false;;
         w) SKIP_WALLPAPERS=true;;
         n) DRY_RUN=true;;
+        g) INSTALL_GNOME=true;;
+        y) AUTO_YES=true;;
         h) usage;;
         \?) echo "Invalid option -$OPTARG" >&2; usage;;
     esac
 done
+
+# Support for --gnome and --yes as well as -g/-y (manual long option parsing)
+for arg in "$@"; do
+    if [[ "$arg" == "--gnome" ]]; then
+        INSTALL_GNOME=true
+    elif [[ "$arg" == "--yes" ]]; then
+        AUTO_YES=true
+    fi
+done
+
+# === Check for Root User ===
+if [ "$EUID" -eq 0 ]; then
+    fatal "Please run this script as a regular user, not root."
+fi
 
 # === OS and Environment Checks ===
 if ! grep -q '^ID=arch' /etc/os-release; then
@@ -96,6 +133,15 @@ fi
 
 if ! command -v sudo >/dev/null 2>&1; then
     fatal "sudo is required but not installed."
+fi
+
+# === Request Sudo Upfront ===
+header "Requesting sudo credentials"
+sudo -v || fatal "Sudo authentication failed."
+
+# === Check for Running Display Manager ===
+if [ -n "${XDG_SESSION_TYPE-}" ]; then
+    warn "You appear to be running inside a graphical session ($XDG_SESSION_TYPE). For best results, run this installer from a TTY."
 fi
 
 # === Dry-run Helper ===
@@ -109,8 +155,8 @@ run() {
 
 # === Confirm Helper ===
 confirm() {
-    if [ "$DRY_RUN" = true ]; then
-        log "[DRY-RUN] Would prompt: $*"
+    if [ "$AUTO_YES" = true ] || [ "$DRY_RUN" = true ]; then
+        log "[AUTO-YES/DRY-RUN] Would prompt: $*"
         return 0
     fi
     read -r -p "$1 (y/N): " REPLY
@@ -128,9 +174,20 @@ log "Selected theme: $THEME"
 log "Full installation: $INSTALL_ALL"
 log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
 log "Dry-run: $DRY_RUN"
+log "Install GNOME first: $INSTALL_GNOME"
+log "Non-interactive mode: $AUTO_YES"
 log "Installer version: $SCRIPT_VERSION"
 
 confirm "Do you want to proceed with the installation?" || fatal "Aborted by user."
+
+# === Optional GNOME Install ===
+if [ "$INSTALL_GNOME" = true ]; then
+    header "Installing GNOME Desktop Environment"
+    log "Installing GNOME provides a stable fallback desktop and ensures your system is ready for graphical troubleshooting and recovery if Wayfire fails to start."
+    run "sudo pacman -S --needed --noconfirm gnome gnome-tweaks gnome-terminal"
+    run "sudo systemctl enable --now gdm"
+    log "GNOME installed. You can log in to GNOME for troubleshooting or as a fallback environment."
+fi
 
 # Check disk space
 check_space() {
@@ -182,6 +239,13 @@ elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
     run "sudo pacman -S --needed --noconfirm mesa vulkan-intel"
 else
     run "sudo pacman -S --needed --noconfirm mesa"
+fi
+
+# === Check Internet Connection ===
+header "Checking for active internet connection"
+if ! ping -c 1 archlinux.org >/dev/null 2>&1; then
+    warn "No active internet connection detected. Installation may fail."
+    confirm "Continue anyway?" || fatal "Internet required for installation."
 fi
 
 # === Detect Wi-Fi and Bluetooth, Install Drivers and Tools ===
@@ -258,6 +322,7 @@ build_git_pkg() {
     local url="$1"
     local pkgdir="$2"
     header "Building and installing $pkgdir"
+    [ -d "$pkgdir" ] && run "rm -rf \"$pkgdir\""
     run "git clone \"$url\""
     cd "$pkgdir" || exit 1
     run "meson build --prefix=/usr --buildtype=release"
@@ -323,6 +388,12 @@ if confirm "Do you want to set Fish as your default shell?"; then
     run "chsh -s /usr/bin/fish"
 fi
 
+# === Starship Prompt in Fish ===
+if [ "$set_fish" = true ] && ! grep -q 'starship init fish' "$HOME/.config/fish/config.fish" 2>/dev/null; then
+    run "paru -S --noconfirm starship"
+    echo 'starship init fish | source' >> "$HOME/.config/fish/config.fish"
+fi
+
 # === Zed Editor ===
 header "Installing Zed editor"
 if ! command -v zed >/dev/null 2>&1; then
@@ -346,6 +417,10 @@ fi
 
 # === Backup and Copy Configs ===
 header "Backing up and copying configuration files"
+if [ -d "$BACKUP_DIR" ]; then
+    suffix=$(date +%s)
+    BACKUP_DIR="${BACKUP_DIR}_$suffix"
+fi
 run "mkdir -p \"$BACKUP_DIR\""
 if [ -d "$HOME/.config" ]; then
     run "cp -r \"$HOME/.config\" \"$BACKUP_DIR/\""
@@ -429,7 +504,7 @@ if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
 [Desktop Entry]
 Name=Wayfire
 Comment=A lightweight and customizable Wayland compositor
-Exec=/usr/bin/wayfire
+Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
 Type=Application
 EOF
 fi
@@ -450,6 +525,7 @@ echo
 if [ "$FAILED" = "true" ]; then
     echo -e "${RED}Installation completed with errors.${NC}"
     echo "Please review $LOG_FILE for more information."
+    exit 1
 else
     echo -e "${GREEN}Installation completed successfully!${NC}"
     echo "See $LOG_FILE for a detailed log."
@@ -461,4 +537,11 @@ else
     if [ "$set_fish" = true ]; then
         echo "Note: Fish shell is now set as default."
     fi
+    if [ "$INSTALL_GNOME" = true ]; then
+        echo
+        echo "GNOME desktop is also installed and enabled as a fallback."
+        echo "If you have any issues with Wayfire, you can always log into GNOME for troubleshooting."
+        echo "You can select between GNOME and Wayfire at your login screen."
+    fi
+    exit 0
 fi
