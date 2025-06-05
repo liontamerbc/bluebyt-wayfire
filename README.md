@@ -139,8 +139,8 @@ ninja -C build install
 ## 🙏 Credits & Resources
 
 - [Bluebyt (Bruno) – Workflow video](https://youtu.be/5dzgKCZbSlA)
-- [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for more documentation and troubleshooting.
 - [`@bluebyt/Wayfire-dots.git`](https://github.com/bluebyt/Wayfire-dots.git)
+- [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for more documentation and troubleshooting.
 
 ---
 
