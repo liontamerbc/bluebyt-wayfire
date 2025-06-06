@@ -7,10 +7,9 @@
 ## ✨ Features
 
 - **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers, utilities, and configurations.
-- **Universal Config Paths:** Uses environment-agnostic placeholders in config files for seamless portability.
-- **Automatic Wallpapers & Dotfiles:** Installs wallpapers and dotfiles to proper system locations.
+- **Universal Config Paths:** Uses environment-agnostic placeholders for seamless portability.
 - **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
-- **Actively Maintained:** Regularly updated with new features and improvements.
+- **Actively Maintained:** Regular updates with new features and improvements.
 
 ---
 
@@ -21,6 +20,10 @@
 ![Wayfire with Pixdecor](https://github.com/user-attachments/assets/6ce465da-e8a9-45d5-a87c-8932cd7ae366)
 
 **GTK4 Apps, Aretha-Dark-Icons, and Pixdecor**
+
+![GTK4, Pixdecor](https://github.com/user-attachments/assets/58606e37-6f79-4ad9-b1cf-20cef66b1213)
+
+[▶️ Install Wayfire on Youtube](https://youtu.be/abtU54uMXH0)
 
 ---
 
@@ -94,30 +97,29 @@ Wayfire is a powerful compositor, but a minimal system may leave you without a g
 
 ## ⚙️ Configuration
 
-- Configs are stored in `$HOME/.config/wayfire.ini` and `$HOME/.config/wf-shell.ini`.
-- The installer will back up your existing configs.
+The installer will back up your existing configs and store them in:
+- `$HOME/.config/wayfire.ini`
+- `$HOME/.config/wf-shell.ini`
 
-## 🔧 System-Specific Changes
-
-The configuration files may need adjustments based on your specific system setup. Here are the key files that might require modifications:
+These files may need adjustments based on your system setup:
 
 1. **`wayfire.ini`**
-   - Display configuration (resolution, refresh rate)
-   - GPU-specific settings
-   - Input device settings
-   - Performance optimizations
+   - Display configuration
+   - GPU settings
+   - Input devices
+   - Performance
 
 2. **`wf-shell.ini`**
    - Workspace layout
-   - Window management rules
-   - Input device bindings
-   - Theme and appearance settings
+   - Window management
+   - Input bindings
+   - Theme settings
 
 The installer automatically handles hardware-specific configurations, including:
-- GPU driver installation
-- Wi-Fi driver installation
-- Bluetooth setup
-- System-specific dependencies
+- GPU drivers
+- Wi-Fi
+- Bluetooth
+- System dependencies
 
 These files are automatically backed up by the installer, so you can safely experiment with changes. If you need to revert to default settings, simply restore from the backup.
 
@@ -138,8 +140,8 @@ No manual action required.
 ## 🙏 Credits & Resources
 
 - [Bluebyt (Bruno) – Workflow video](https://youtu.be/5dzgKCZbSlA)
-- [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for more documentation and troubleshooting.
-- [`@bluebyt/Wayfire-dots.git`](https://github.com/bluebyt/Wayfire-dots.git)
+- [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for documentation and troubleshooting
+- Original [Wayfire-dots](https://github.com/bluebyt/Wayfire-dots.git)
 
 ---
 
