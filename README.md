@@ -46,8 +46,7 @@ The installer will ask if you want to install GNOME as a fallback desktop during
 
 ## 💡 Why install GNOME as a fallback?
 
-Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong.  
-**The installer allows you to automatically install GNOME (`-g` or `--gnome`) as a stable, full-featured desktop for troubleshooting and recovery.**
+Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong. The installer will ask if you want to install GNOME as a stable, full-featured desktop for troubleshooting and recovery.
 
 **Benefits:**
 - Reliable fallback: Always be able to log into a working desktop if Wayfire fails.
