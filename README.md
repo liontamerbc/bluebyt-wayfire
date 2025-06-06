@@ -9,7 +9,6 @@
 - **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers, utilities, and configurations.
 - **Universal Config Paths:** Uses environment-agnostic placeholders for seamless portability.
 - **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
-- **Actively Maintained:** Regular updates with new features and improvements.
 
 ---
 
