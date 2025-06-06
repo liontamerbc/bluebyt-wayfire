@@ -6,8 +6,7 @@
 
 ## ✨ Features
 
-- **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers (CPU, GPU, Wi-Fi, Bluetooth), utilities, and configurations.
-- **Optional GNOME Fallback:** The installer gives you the option to automatically install the GNOME desktop (with `-g` or `--gnome`) as a robust fallback and troubleshooting environment.
+- **One-Click Installer:** Automates setup on Arch Linux, including all dependencies, drivers, utilities, and configurations.
 - **Universal Config Paths:** Uses environment-agnostic placeholders in config files for seamless portability.
 - **Automatic Wallpapers & Dotfiles:** Installs wallpapers and dotfiles to proper system locations.
 - **Curated Experience:** Every detail, from themes to scripts, is chosen for performance and beauty.
@@ -76,39 +75,18 @@ You can install GNOME as a fallback desktop by passing the `-g` or `--gnome` opt
 ./installer.sh --gnome
 ```
 
-This is **highly recommended for new setups** or if you want a reliable troubleshooting environment.
-
 ---
 
 ## 📝 Manual Installation
 
-Although the installer automates most hardware detection and driver installation, here is a summary of what it does for reference:
+Here's a summary of what the installer does:
 
-### 1. Install Dependencies
+1. Installs dependencies and core packages
+2. Builds Wayfire and essential components from source
+3. Installs GPU, CPU, Wi-Fi, and Bluetooth drivers
+4. Sets up themes, icons, and configurations
 
-Including build tools, libraries, and core packages for Wayfire and all included utilities.
-
-### 2. Build and Install Wayfire, wf-shell, wcm, and Pixdecor
-
-Clones and builds from source:
-- [Wayfire](https://github.com/WayfireWM/wayfire)
-- [wf-shell](https://github.com/WayfireWM/wf-shell)
-- [wcm](https://github.com/WayfireWM/wcm)
-- [Pixdecor](https://github.com/soreau/pixdecor)
-
-### 3. Install GPU, CPU, Wi-Fi, and Bluetooth Drivers
-
-- Detects Intel/AMD CPUs and installs microcode.
-- Detects NVIDIA, AMD, or Intel GPUs and installs the appropriate drivers.
-- Detects common Broadcom/Realtek Wi-Fi chipsets and guides AUR driver installation if needed.
-- Installs `networkmanager`, `wireless_tools`, and `linux-firmware`.
-- Installs `bluez` and `bluez-utils`, and enables Bluetooth.
-
-### 4. Theme, Icons, and Configurations
-
-- Installs your chosen GTK theme and icon set.
-- Applies theme and icons via config.
-- Copies all config files, scripts, and dotfiles to your home directory.
+For detailed installation steps, see the [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki).
 
 ---
 
@@ -116,6 +94,30 @@ Clones and builds from source:
 
 - Configs are stored in `$HOME/.config/wayfire.ini` and `$HOME/.config/wf-shell.ini`.
 - The installer will back up your existing configs.
+
+## 🔧 System-Specific Changes
+
+The configuration files may need adjustments based on your specific system setup. Here are the key files that might require modifications:
+
+1. **`wayfire.ini`**
+   - Display configuration (resolution, refresh rate)
+   - GPU-specific settings
+   - Input device settings
+   - Performance optimizations
+
+2. **`wf-shell.ini`**
+   - Workspace layout
+   - Window management rules
+   - Input device bindings
+   - Theme and appearance settings
+
+The installer automatically handles hardware-specific configurations, including:
+- GPU driver installation
+- Wi-Fi driver installation
+- Bluetooth setup
+- System-specific dependencies
+
+These files are automatically backed up by the installer, so you can safely experiment with changes. If you need to revert to default settings, simply restore from the backup.
 
 ---
 
@@ -142,12 +144,11 @@ Wayfire is a powerful compositor, but a minimal system may leave you without a g
 
 ## 🎨 Advanced: Follow Focus & Inactive Alpha
 
-These features are now fully automated by the installer:
-
-- Sets up the required environment variable.
-- Downloads and configures `inactive-alpha.py` and `wayfire_socket.py`.
-- Updates your `wayfire.ini` with the correct plugins and autostart entries.
-- Makes all scripts executable.
+The installer automatically configures these features, including:
+- Environment variable setup
+- Required script installation
+- Plugin configuration
+- Script permissions
 
 No manual action required.
 
