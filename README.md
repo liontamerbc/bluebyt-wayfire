@@ -38,6 +38,29 @@ The installer will ask if you want to install GNOME as a fallback desktop during
 
 ---
 
+## 🧩 Included Components
+
+- [Wayfire](https://github.com/WayfireWM/wayfire) – 3D Wayland compositor
+- [GNOME Desktop](https://www.gnome.org/) – Stable fallback desktop environment
+- [Pixdecor](https://github.com/soreau/pixdecor) – Antialiased window decorations
+- [Ironbar](https://github.com/JakeStanger/ironbar) – Powerful GTK status bar
+- [eww](https://github.com/elkowar/eww) – Interactive widgets (left panel)
+- [Mako](https://github.com/emersion/mako) – Notification daemon
+- [Tokyonight-Dark](https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme) – GTK theme
+- [Tela-circle-icon-theme](https://github.com/vinceliuice/Tela-circle-icon-theme) or [Aretha-Dark-Icons](https://www.gnome-look.org/p/2180417)
+- [Fish shell](https://github.com/fish-shell/fish-shell) & [Starship](https://starship.rs/) prompt
+- [Catnip](https://github.com/iinsertNameHere/catnip) – System fetch tool
+- [SwayOSD](https://github.com/ErikReider/SwayOSD) – On-screen display
+- [Lite XL](https://lite-xl.com/) – Lightweight extensible text editor
+- [Ulauncher](https://ulauncher.io/) – Application launcher
+- [Grimshot-pv](https://github.com/ferdiebergado/grimshot-pv) – Screenshot preview
+- [Xava](https://github.com/nikp123/xava) – Audio visualizer
+- [ncmpcpp](https://github.com/ncmpcpp/ncmpcpp) – Terminal music player
+- [Swappy](https://github.com/jtheoof/swappy) – Wayland snapshot & editor
+- **Font:** Caskaydiacove Nerd Font
+
+---
+
 ## 💡 Why install GNOME as a fallback?
 
 Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong. The installer will ask if you want to install GNOME as a stable, full-featured desktop for troubleshooting and recovery.
