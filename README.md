@@ -21,7 +21,12 @@ cd bluebyt-wayfire
 ./installer.sh
 ```
 
-The installer will ask if you want to install GNOME as a fallback desktop during the installation process.
+The installer will ask if you want to install GNOME as a fallback desktop during the installation process. You can also use the `-g` or `--gnome` flag to automatically enable GNOME installation:
+
+```sh
+./installer.sh -g        # Short flag
+./installer.sh --gnome   # Long flag
+```
 
 ---
 
@@ -35,12 +40,7 @@ The installer will ask if you want to install GNOME as a fallback desktop during
 
 ## 💡 Why install GNOME as a fallback?
 
-Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong. The installer will ask if you want to install GNOME as a stable, full-featured desktop for troubleshooting and recovery. You can also use the `-g` or `--gnome` flag to automatically enable GNOME installation:
-
-```sh
-./installer.sh -g        # Short flag
-./installer.sh --gnome   # Long flag
-```
+Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong. The installer will ask if you want to install GNOME as a stable, full-featured desktop for troubleshooting and recovery.
 
 **Benefits:**
 - Reliable fallback: Always be able to log into a working desktop if Wayfire fails.
