@@ -32,14 +32,7 @@ cd bluebyt-wayfire
 ./installer.sh
 ```
 
-### GNOME Desktop Option
-
-You can install GNOME as a fallback desktop by passing the `-g` or `--gnome` option:
-
-```sh
-./installer.sh -g        # or
-./installer.sh --gnome
-```
+The installer will ask if you want to install GNOME as a fallback desktop during the installation process.
 
 ---
 
