@@ -13,18 +13,6 @@
 
 ---
 
-## 📸 Screenshots
-
-**Wayfire with Pixdecor**
-
-![Wayfire with Pixdecor](https://github.com/user-attachments/assets/6ce465da-e8a9-45d5-a87c-8932cd7ae366)
-
-**GTK4 Apps, Aretha-Dark-Icons, and Pixdecor**
-
-![GTK4, Pixdecor](https://github.com/user-attachments/assets/58606e37-6f79-4ad9-b1cf-20cef66b1213)
-
-[▶️ Install Wayfire on Youtube](https://youtu.be/abtU54uMXH0)
-
 ---
 
 ## 🚀 Quick Start
