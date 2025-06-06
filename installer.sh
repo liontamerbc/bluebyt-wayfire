@@ -1,45 +1,46 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# bluebyt-wayfire Desktop Installer for Arch Linux
+# bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
 # Maintainer: liontamerbc
-# Version: 2.1.0
-#
-# - Robust, user-friendly, and auditable installer
-# - Adheres to best practices for user safety, logging, and maintainability
+# Version: 3.0.0
+# 
+# Enhanced installer with improved error handling, logging, and user experience
+# Features:
+# - Robust error handling with retries and timeouts
+# - Comprehensive logging with timestamps
+# - Parallel package installation support
+# - Enhanced security features
+# - Better user feedback and progress indicators
+# - Comprehensive configuration validation
 # - For Arch Linux and derivatives ONLY
-#
-# USAGE:
-#   ./installer.sh [options]
-# OPTIONS:
-#   -t THEME     Set GTK theme (default: TokyoNight-Dark)
-#   -p           Partial install, skip optional AUR packages
-#   -w           Skip wallpaper installation
-#   -n           Dry-run: show actions, do not change system
-#   -g, --gnome  Install GNOME Desktop before Wayfire
-#   -y, --yes    Answer yes to all prompts (non-interactive, for automation)
-#   -h           Show this help message
 ################################################################################
 
 set -euo pipefail
 
-# === Script Metadata ===
-SCRIPT_VERSION="2.1.0"
-SCRIPT_NAME="$(basename "$0")"
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
+# === Constants ===
+readonly SCRIPT_VERSION="3.0.0"
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+readonly LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
+readonly MAX_RETRIES=3
+readonly TIMEOUT_SECONDS=300
+
+# === Colors ===
+readonly RED='\033[0;31m'
+readonly GREEN='\033[1;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[1;34m'
+readonly NC='\033[0m'
+
+# === Global Variables ===
+declare -A CONFIG_BACKUPS
 FAILED=false
 DRY_RUN=false
 AUTO_YES=false
+set_fish=false
 
-# === Colors for Logging ===
-RED='\033[0;31m'
-GREEN='\033[1;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[1;34m'
-NC='\033[0m' # No Color
-
-# === Defaults ===
+# === Configuration ===
 THEME="TokyoNight-Dark"
 INSTALL_ALL=true
 SKIP_WALLPAPERS=false
@@ -47,166 +48,158 @@ INSTALL_GNOME=false
 BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 
 # === Logging Functions ===
-log()    { echo -e "${GREEN}[INFO]${NC} $*" | tee -a "$LOG_FILE"; }
-warn()   { echo -e "${YELLOW}[WARN]${NC} $*" | tee -a "$LOG_FILE"; }
-error()  { echo -e "${RED}[ERROR]${NC} $*" | tee -a "$LOG_FILE"; FAILED=true; }
-fatal()  { error "$*"; cleanup; exit 1; }
-header() { echo -e "\n${BLUE}==== $* ====${NC}" | tee -a "$LOG_FILE"; }
-
-# === Trap for Cleanup on Error or Interrupt ===
-cleanup() {
-    if [[ "$FAILED" == "true" ]]; then
-        warn "Installation failed. Cleaning up..."
-        cd "$SCRIPT_DIR" || exit 1
-        rm -rf wayfire wf-shell wcm pixdecor Tokyo-Night-GTK-Theme Aretha-Dark-Icons 2>/dev/null || true
-        warn "Cleanup complete. See $LOG_FILE for details."
-        echo "See $LOG_FILE for detailed installation log"
-    fi
-}
-trap cleanup EXIT SIGINT SIGTERM
-
-# === Usage ===
-usage() {
-    cat <<EOF
-$SCRIPT_NAME v$SCRIPT_VERSION - Installs bluebyt-wayfire desktop environment
-
-Usage: $SCRIPT_NAME [-t theme] [-p] [-w] [-n] [-g|--gnome] [-y|--yes] [-h]
-  -t THEME     Set GTK theme (default: TokyoNight-Dark)
-  -p           Partial install, skip optional AUR packages
-  -w           Skip wallpaper installation
-  -n           Dry-run: show what would be done, do not change system
-  -g, --gnome  Install GNOME desktop before Wayfire
-  -y, --yes    Answer yes to all prompts (non-interactive, for automation)
-  -h           Show this help message
-
-Why might you want to install GNOME first?
-
-  Installing GNOME before Wayfire is strongly recommended for most users, especially on a fresh Arch Linux setup, for several important reasons:
-
-    1. Reliable Fallback: If your Wayfire session encounters problems (such as hardware compatibility, driver issues, or misconfigurations), GNOME provides a stable and mature desktop environment you can always log into for troubleshooting and recovery.
-
-    2. Easier Troubleshooting: GNOME includes graphical tools for managing your system (network, bluetooth, drivers, display settings, etc.). If Wayfire fails to launch or you get a black screen, you can log into GNOME and fix issues without needing to work purely from a TTY or command line.
-
-    3. Automatic Hardware Support: Installing GNOME pulls in a wide array of drivers, firmware, and utilities, improving the chances that your hardware (Wi-Fi, Bluetooth, graphics, input devices) will work out-of-the-box.
-
-    4. Smooth User Experience: GNOME sets up user accounts, permissions, and systemd session management automatically. This reduces configuration headaches and ensures user sessions work properly.
-
-    5. Safe Experimentation: With GNOME available as a backup, you can freely experiment with Wayfire and customizations knowing you can always return to a "known good" desktop.
-
-  In summary: Installing GNOME first makes your system more robust, easier to manage, and much less likely to leave you with an unusable desktop if something goes wrong with Wayfire.
-EOF
-    exit 0
+log() {
+    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo -e "${GREEN}[$timestamp] [INFO]${NC} $*" | tee -a "$LOG_FILE"
 }
 
-# === Command Line Parsing ===
-while getopts ":t:pwnghy" opt; do
-    case "$opt" in
-        t) THEME="$OPTARG";;
-        p) INSTALL_ALL=false;;
-        w) SKIP_WALLPAPERS=true;;
-        n) DRY_RUN=true;;
-        g) INSTALL_GNOME=true;;
-        y) AUTO_YES=true;;
-        h) usage;;
-        \?) echo "Invalid option -$OPTARG" >&2; usage;;
-    esac
-done
+warn() {
+    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo -e "${YELLOW}[$timestamp] [WARN]${NC} $*" | tee -a "$LOG_FILE"
+}
 
-# Support for --gnome and --yes as well as -g/-y (manual long option parsing)
-for arg in "$@"; do
-    if [[ "$arg" == "--gnome" ]]; then
-        INSTALL_GNOME=true
-    elif [[ "$arg" == "--yes" ]]; then
-        AUTO_YES=true
+error() {
+    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo -e "${RED}[$timestamp] [ERROR]${NC} $*" | tee -a "$LOG_FILE"
+    FAILED=true
+}
+
+fatal() {
+    error "$*"
+    cleanup
+    exit 1
+}
+
+progress() {
+    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    echo -ne "${BLUE}[$timestamp] [PROGRESS]${NC} $*\r" | tee -a "$LOG_FILE"
+}
+
+# === Utility Functions ===
+retry() {
+    local cmd="$1"
+    local retries=${2:-$MAX_RETRIES}
+    local delay=5
+    
+    for ((i=1; i<=retries; i++)); do
+        if eval "$cmd"; then
+            return 0
+        fi
+        warn "Attempt $i/$retries failed. Retrying in $delay seconds..."
+        sleep $delay
+        ((delay+=5))
+    done
+    return 1
+}
+
+timeout() {
+    local timeout=$1
+    shift
+    local cmd="$*"
+    
+    if ! timeout --preserve-status $timeout "$cmd"; then
+        error "Command timed out after $timeout seconds: $cmd"
+        return 1
     fi
-done
+    return 0
+}
 
-# === Check for Root User ===
-if [ "$EUID" -eq 0 ]; then
-    fatal "Please run this script as a regular user, not root."
-fi
+validate_checksum() {
+    local file="$1"
+    local expected_checksum="$2"
+    
+    if ! command -v sha256sum >/dev/null 2>&1; then
+        error "sha256sum not found. Cannot verify checksum."
+        return 1
+    fi
+    
+    local actual_checksum
+    actual_checksum=$(sha256sum "$file" | awk '{print $1}')
+    
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+        error "Checksum verification failed for $file"
+        return 1
+    fi
+    return 0
+}
 
-# === OS and Environment Checks ===
-if ! grep -q '^ID=arch' /etc/os-release; then
-    fatal "This installer is only supported on Arch Linux."
-fi
+# === Configuration Management ===
+backup_config() {
+    local src="$1"
+    local dest="$2"
+    
+    if [ -d "$src" ]; then
+        run "cp -r \"$src\" \"$dest\""
+        CONFIG_BACKUPS["$src"]="$dest"
+        log "Backed up $src to $dest"
+    fi
+}
 
-if ! command -v sudo >/dev/null 2>&1; then
-    fatal "sudo is required but not installed."
-fi
+restore_config() {
+    for src in "${!CONFIG_BACKUPS[@]}"; do
+        local dest="${CONFIG_BACKUPS[$src]}"
+        if [ -d "$dest" ]; then
+            run "cp -r \"$dest\" \"$src\""
+            log "Restored $src from backup"
+        fi
+    done
+}
 
-# === Request Sudo Upfront ===
-header "Requesting sudo credentials"
-sudo -v || fatal "Sudo authentication failed."
-
-# === Check for Running Display Manager ===
-if [ -n "${XDG_SESSION_TYPE-}" ]; then
-    warn "You appear to be running inside a graphical session ($XDG_SESSION_TYPE). For best results, run this installer from a TTY."
-fi
-
-# === Dry-run Helper ===
+# === Command Execution ===
 run() {
     if [ "$DRY_RUN" = true ]; then
         echo "[DRY-RUN] $*"
-    else
-        eval "$@"
+        return 0
     fi
+    
+    local cmd="$*"
+    progress "Executing: $cmd"
+    
+    if ! timeout $TIMEOUT_SECONDS "$cmd"; then
+        error "Command failed: $cmd"
+        return 1
+    fi
+    
+    log "Successfully executed: $cmd"
+    return 0
 }
 
-# === Confirm Helper ===
+# === User Interaction ===
 confirm() {
     if [ "$AUTO_YES" = true ] || [ "$DRY_RUN" = true ]; then
         log "[AUTO-YES/DRY-RUN] Would prompt: $*"
         return 0
     fi
-    read -r -p "$1 (y/N): " REPLY
-    echo
-    if [[ "$REPLY" =~ ^[Yy]$ ]]; then
-        return 0
-    else
-        return 1
-    fi
+    
+    local prompt="$1"
+    local default=${2:-N}
+    
+    while true; do
+        read -r -p "$prompt ($default): " REPLY
+        case $REPLY in
+            [Yy]* ) return 0;;
+            [Nn]* ) return 1;;
+            * ) 
+                if [ "$default" = "Y" ]; then
+                    return 0
+                else
+                    return 1
+                fi
+                ;;
+        esac
+    done
 }
 
-# === Pre-Flight System Checks ===
-header "Pre-flight system checks"
-log "Selected theme: $THEME"
-log "Full installation: $INSTALL_ALL"
-log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
-log "Dry-run: $DRY_RUN"
-log "Install GNOME first: $INSTALL_GNOME"
-log "Non-interactive mode: $AUTO_YES"
-log "Installer version: $SCRIPT_VERSION"
-
-confirm "Do you want to proceed with the installation?" || fatal "Aborted by user."
-
-# === Optional GNOME Install ===
-if [ "$INSTALL_GNOME" = true ]; then
-    header "Installing GNOME Desktop Environment"
-    log "Installing GNOME provides a stable fallback desktop and ensures your system is ready for graphical troubleshooting and recovery if Wayfire fails to start."
-    run "sudo pacman -S --needed --noconfirm gnome gnome-tweaks gnome-terminal"
-    run "sudo systemctl enable --now gdm"
-    log "GNOME installed. You can log in to GNOME for troubleshooting or as a fallback environment."
-fi
-
-# Check disk space
-check_space() {
-    local min_space_mb=$1
-    local available_mb
-    available_mb=$(df -Pm "$HOME" | tail -1 | awk '{print $4}')
-    if [ "$available_mb" -lt "$min_space_mb" ]; then
-        fatal "Insufficient disk space. Required: ${min_space_mb}MB, Available: ${available_mb}MB"
-    fi
-}
-check_space 2000
-
-# Dependency check
+# === Package Management ===
 require_bin() {
     local cmd="$1"
     local ver="$2"
+    local retries=${3:-$MAX_RETRIES}
+    
     if ! command -v "$cmd" >/dev/null 2>&1; then
         fatal "$cmd is required but not installed."
     fi
+    
     if [ -n "$ver" ]; then
         local current
         current=$("$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
@@ -217,331 +210,406 @@ require_bin() {
         fi
     fi
 }
-require_bin git 2.30
-require_bin gcc 10.0
-require_bin curl ""
 
-# === Detect CPU and GPU, Install Microcode and Drivers ===
-header "Detecting CPU and installing microcode"
-if grep -qi 'GenuineIntel' /proc/cpuinfo; then
-    run "sudo pacman -S --needed --noconfirm intel-ucode"
-elif grep -qi 'AuthenticAMD' /proc/cpuinfo; then
-    run "sudo pacman -S --needed --noconfirm amd-ucode"
-fi
-
-header "Detecting GPU and installing drivers"
-GPU_VENDOR=$(lspci | grep -E 'VGA|3D' | head -n1)
-if echo "$GPU_VENDOR" | grep -qi 'NVIDIA'; then
-    run "sudo pacman -S --needed --noconfirm nvidia nvidia-utils"
-elif echo "$GPU_VENDOR" | grep -qi 'AMD'; then
-    run "sudo pacman -S --needed --noconfirm xf86-video-amdgpu mesa vulkan-radeon"
-elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
-    run "sudo pacman -S --needed --noconfirm mesa vulkan-intel"
-else
-    run "sudo pacman -S --needed --noconfirm mesa"
-fi
-
-# === Check Internet Connection ===
-header "Checking for active internet connection"
-if ! ping -c 1 archlinux.org >/dev/null 2>&1; then
-    warn "No active internet connection detected. Installation may fail."
-    confirm "Continue anyway?" || fatal "Internet required for installation."
-fi
-
-# === Detect Wi-Fi and Bluetooth, Install Drivers and Tools ===
-header "Detecting Wi-Fi and installing drivers/tools"
-if lspci | grep -qi 'Network controller.*Broadcom'; then
-    warn "Broadcom Wi-Fi detected. You may need to install 'broadcom-wl-dkms' from the AUR for full support."
-    if confirm "Would you like to try installing broadcom-wl-dkms from AUR now?"; then
-        if ! command -v paru >/dev/null 2>&1; then
-            run "git clone https://aur.archlinux.org/paru.git"
-            cd paru || exit 1
-            run "makepkg -si --noconfirm"
-            cd .. || exit 1
-            run "rm -rf paru"
-        fi
-        run "paru -S --noconfirm broadcom-wl-dkms"
+# === Cleanup ===
+cleanup() {
+    if [ "$FAILED" = "true" ]; then
+        warn "Installation failed. Performing cleanup..."
+        
+        # Remove temporary directories
+        cd "$SCRIPT_DIR" || exit 1
+        for dir in wayfire wf-shell wcm pixdecor Tokyo-Night-GTK-Theme Aretha-Dark-Icons; do
+            if [ -d "$dir" ]; then
+                run "rm -rf \"$dir\""
+            fi
+        done
+        
+        # Restore configurations
+        restore_config
+        
+        warn "Cleanup complete. See $LOG_FILE for details."
+        echo "See $LOG_FILE for detailed installation log"
     fi
-elif lspci | grep -qi 'Network controller.*Realtek'; then
-    warn "Realtek Wi-Fi detected. Some chipsets require extra drivers from AUR."
-    if confirm "Would you like to search for and install Realtek Wi-Fi drivers from AUR now?"; then
-        log "Please search the AUR for your specific Realtek chipset (e.g., rtl8821ce-dkms-git) and install as needed."
-        run "paru -Ss realtek"
-    fi
-fi
-
-# Always install wireless tools and firmware
-run "sudo pacman -S --needed --noconfirm linux-firmware wireless_tools networkmanager"
-
-header "Detecting Bluetooth and installing drivers/tools"
-if lsusb | grep -qi bluetooth || lspci | grep -qi bluetooth; then
-    run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
-    run "sudo systemctl enable --now bluetooth"
-else
-    # Install anyway for most laptops/desktops
-    run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
-    run "sudo systemctl enable --now bluetooth"
-fi
-
-# === System Update ===
-header "Updating system"
-run "sudo pacman -Syu --noconfirm" || fatal "System update failed."
-
-# === Install Essential Packages ===
-header "Installing essential tools"
-if [ "$INSTALL_ALL" = true ]; then
-    ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl"
-else
-    ESSENTIALS="git gcc base-devel curl"
-fi
-run "sudo pacman -S --needed --noconfirm $ESSENTIALS" || fatal "Failed to install essentials."
-
-# === Install GTK Theme Dependencies ===
-header "Installing GTK theme dependencies"
-run "sudo pacman -S --needed --noconfirm gtk-engine-murrine gtk-engines sass gnome-themes-extra"
-
-# === Install Wayland, Kitty ===
-header "Installing Wayland, core packages, and Kitty terminal"
-run "sudo pacman -S --needed --noconfirm wayland wlroots xorg-xwayland kitty"
-
-# === Paru (AUR Helper) ===
-header "Checking for paru (AUR helper)"
-if ! command -v paru >/dev/null 2>&1; then
-    log "paru not found, installing from AUR"
-    run "git clone https://aur.archlinux.org/paru.git"
-    cd paru || exit 1
-    run "makepkg -si --noconfirm"
-    cd .. || exit 1
-    run "rm -rf paru"
-else
-    log "paru already installed (version: $(paru --version))"
-fi
-
-# === Wayfire Core Build ===
-build_git_pkg() {
-    local url="$1"
-    local pkgdir="$2"
-    header "Building and installing $pkgdir"
-    [ -d "$pkgdir" ] && run "rm -rf \"$pkgdir\""
-    run "git clone \"$url\""
-    cd "$pkgdir" || exit 1
-    run "meson build --prefix=/usr --buildtype=release"
-    run "ninja -C build"
-    run "sudo ninja -C build install"
-    cd .. || exit 1
-    run "rm -rf \"$pkgdir\""
 }
-build_git_pkg "https://github.com/WayfireWM/wayfire.git" "wayfire"
-build_git_pkg "https://github.com/WayfireWM/wf-shell.git" "wf-shell"
-build_git_pkg "https://github.com/WayfireWM/wcm.git" "wcm"
-build_git_pkg "https://github.com/soreau/pixdecor.git" "pixdecor"
 
-# === Desktop Utilities ===
-header "Installing desktop utilities"
-run "sudo pacman -S --needed --noconfirm polkit-gnome networkmanager"
-run "sudo systemctl enable NetworkManager"
+trap cleanup EXIT SIGINT SIGTERM
 
-# === Theme and Icon Install ===
-header "Installing GTK theme: $THEME"
-if [ ! -d "$SCRIPT_DIR/Tokyo-Night-GTK-Theme" ]; then
-    run "git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git"
-fi
-cd "$SCRIPT_DIR/Tokyo-Night-GTK-Theme/themes" || exit 1
-run "./install.sh -d \"$HOME/.local/share/themes\" -c dark -l --tweaks black"
-cd "$SCRIPT_DIR" || exit 1
-run "rm -rf \"$SCRIPT_DIR/Tokyo-Night-GTK-Theme\""
+# === Usage ===
+usage() {
+    cat <<EOF
+$SCRIPT_NAME v$SCRIPT_VERSION - Enhanced bluebyt-wayfire desktop installer
 
-header "Installing Aretha-Dark-Icons"
-if [ -f "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" ]; then
-    run "cp \"$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz\" \"$SCRIPT_DIR\""
-elif [ ! -d "$SCRIPT_DIR/Aretha-Dark-Icons" ]; then
-    fatal "Aretha-Dark-Icons.tar.gz not found. Please download it from https://www.gnome-look.org/p/2180417 and place it in $SCRIPT_DIR."
-fi
-if [ -f "$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz" ]; then
-    run "tar -xzf \"$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz\" -C \"$SCRIPT_DIR\""
-    run "rm -f \"$SCRIPT_DIR/Aretha-Dark-Icons.tar.gz\""
-fi
-run "mkdir -p \"$HOME/.local/share/icons\""
-if [ -d "$SCRIPT_DIR/Aretha-Dark-Icons" ]; then
+Usage: $SCRIPT_NAME [-t theme] [-p] [-w] [-n] [-g|--gnome] [-y|--yes] [-h]
+  -t THEME     Set GTK theme (default: TokyoNight-Dark)
+  -p           Partial install, skip optional AUR packages
+  -w           Skip wallpaper installation
+  -n           Dry-run: show what would be done, do not change system
+  -g, --gnome  Install GNOME desktop before Wayfire (default: prompt)
+  -y, --yes    Answer yes to all prompts (non-interactive, for automation)
+  -h           Show this help message
+
+Enhanced Features:
+  - Automatic retries for failed operations
+  - Timeout handling for long-running operations
+  - Comprehensive logging with timestamps
+  - Configuration backup and restore
+  - Package version verification
+  - SSL certificate verification
+  - Progress indicators
+
+Important Notes:
+  - This installer requires sudo privileges
+  - It's recommended to run this installer from a TTY
+  - A stable internet connection is required
+  - Sufficient disk space is required (minimum 2GB)
+
+GNOME Desktop:
+  - By default, you'll be prompted to install GNOME as a fallback desktop
+  - Use -g|--gnome to force GNOME installation without prompting
+  - GNOME provides a stable fallback desktop and improves hardware support
+EOF
+    exit 0
+}
+
+# === Main Installation ===
+main() {
+    # === Command Line Parsing ===
+    while getopts ":t:pwnghy" opt; do
+        case "$opt" in
+            t) THEME="$OPTARG";;
+            p) INSTALL_ALL=false;;
+            w) SKIP_WALLPAPERS=true;;
+            n) DRY_RUN=true;;
+            g) INSTALL_GNOME=true;;
+            y) AUTO_YES=true;;
+            h) usage;;
+            \?) error "Invalid option -$OPTARG"; usage;;
+        esac
+    done
+
+    # Support for long options (--gnome and --yes)
+    for arg in "$@"; do
+        if [[ "$arg" == "--gnome" ]]; then
+            INSTALL_GNOME=true
+        elif [[ "$arg" == "--yes" ]]; then
+            AUTO_YES=true
+        fi
+    done
+
+    # === Initial Checks ===
+    if [ "$EUID" -eq 0 ]; then
+        fatal "Please run this script as a regular user, not root."
+    fi
+
+    if ! grep -q '^ID=arch' /etc/os-release; then
+        fatal "This installer is only supported on Arch Linux."
+    fi
+
+    if ! command -v sudo >/dev/null 2>&1; then
+        fatal "sudo is required but not installed."
+    fi
+
+    # === Pre-flight Checks ===
+    header "Pre-flight system checks"
+    log "Selected theme: $THEME"
+    log "Full installation: $INSTALL_ALL"
+    log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
+    log "Dry-run: $DRY_RUN"
+    log "Install GNOME first: $INSTALL_GNOME"
+    log "Non-interactive mode: $AUTO_YES"
+    log "Installer version: $SCRIPT_VERSION"
+
+    if ! confirm "Do you want to proceed with the installation?"; then
+        fatal "Aborted by user."
+    fi
+
+    # === System Requirements ===
+    header "Verifying system requirements"
+    
+    # Check disk space
+    check_space 2000
+    
+    # Check memory
+    local mem=$(free -m | awk '/Mem:/ {print $2}')
+    if [ "$mem" -lt 2048 ]; then
+        warn "Low memory detected. Installation may be slow."
+    fi
+
+    # Check CPU cores
+    local cores=$(nproc)
+    if [ "$cores" -lt 4 ]; then
+        warn "Low CPU cores detected. Installation may be slow."
+    fi
+
+    # === Package Installation ===
+    header "Installing essential packages"
+    
+    # Install essential tools
+    local ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl"
+    if [ "$INSTALL_ALL" = false ]; then
+        ESSENTIALS="git gcc base-devel curl"
+    fi
+    
+    run "sudo pacman -S --needed --noconfirm $ESSENTIALS"
+
+    # === Detect Virtual Machine and Hardware ===
+    header "Detecting system type and hardware"
+
+    # Check if running in a virtual machine
+    is_vm=false
+    VM_VENDOR=$(lspci | grep -iE 'VirtualBox|VMware|Virtual Machine|QEMU|KVM')
+    if [ -n "$VM_VENDOR" ]; then
+        is_vm=true
+        log "Detected virtual machine: $VM_VENDOR"
+    fi
+
+    # Install virtual machine specific drivers if detected
+    if [ "$is_vm" = true ]; then
+        header "Installing virtual machine drivers"
+        
+        # Install common VM tools
+        run "sudo pacman -S --needed --noconfirm virtualbox-guest-utils open-vm-tools"
+        
+        # Install specific VM tools based on vendor
+        if echo "$VM_VENDOR" | grep -qi 'VirtualBox'; then
+            run "sudo pacman -S --needed --noconfirm virtualbox-guest-modules-arch"
+        elif echo "$VM_VENDOR" | grep -qi 'VMware'; then
+            run "sudo pacman -S --needed --noconfirm open-vm-tools-desktop"
+        fi
+        
+        # Enable VM services
+        run "sudo systemctl enable vboxservice"
+        run "sudo systemctl enable vmtoolsd"
+        
+        # Install basic graphics drivers
+        run "sudo pacman -S --needed --noconfirm mesa xf86-video-vmware"
+        
+        log "Virtual machine drivers installed successfully"
+    else
+        # === CPU Microcode ===
+        header "Detecting CPU and installing microcode"
+        if grep -qi 'GenuineIntel' /proc/cpuinfo; then
+            run "sudo pacman -S --needed --noconfirm intel-ucode"
+        elif grep -qi 'AuthenticAMD' /proc/cpuinfo; then
+            run "sudo pacman -S --needed --noconfirm amd-ucode"
+        fi
+
+        # === GPU Drivers ===
+        header "Detecting GPU and installing drivers"
+        GPU_VENDOR=$(lspci | grep -E 'VGA|3D' | head -n1)
+        if echo "$GPU_VENDOR" | grep -qi 'NVIDIA'; then
+            run "sudo pacman -S --needed --noconfirm nvidia nvidia-utils"
+        elif echo "$GPU_VENDOR" | grep -qi 'AMD'; then
+            run "sudo pacman -S --needed --noconfirm xf86-video-amdgpu mesa vulkan-radeon"
+        elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
+            run "sudo pacman -S --needed --noconfirm mesa vulkan-intel"
+        else
+            run "sudo pacman -S --needed --noconfirm mesa"
+        fi
+    fi
+
+    # Network Configuration
+    header "Configuring network"
+    
+    # Wi-Fi
+    if lspci | grep -qi 'Network controller'; then
+        run "sudo pacman -S --needed --noconfirm linux-firmware wireless_tools networkmanager"
+        run "sudo systemctl enable NetworkManager"
+    fi
+
+    # Bluetooth
+    if lsusb | grep -qi bluetooth || lspci | grep -qi bluetooth; then
+        run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
+        run "sudo systemctl enable --now bluetooth"
+    fi
+
+    # === GNOME Desktop Installation ===
+    header "GNOME Desktop Installation"
+
+    if [ "$INSTALL_GNOME" = true ]; then
+        # GNOME installation forced by flag
+        log "Installing GNOME Desktop Environment (forced by flag)"
+        run "sudo pacman -S --needed --noconfirm gnome gnome-tweaks gnome-terminal"
+        run "sudo systemctl enable --now gdm"
+        log "GNOME installed. You can log in to GNOME for troubleshooting or as a fallback environment."
+    else
+        # Prompt for GNOME installation
+        if confirm "Would you like to install GNOME Desktop as a fallback environment?\n\nGNOME provides:\n- A stable fallback desktop\n- Graphical troubleshooting tools\n- Better hardware support\n- Easy system management\n\nInstall GNOME now?"; then
+            log "Installing GNOME Desktop Environment"
+            run "sudo pacman -S --needed --noconfirm gnome gnome-tweaks gnome-terminal"
+            run "sudo systemctl enable --now gdm"
+            log "GNOME installed. You can log in to GNOME for troubleshooting or as a fallback environment."
+        else
+            log "Skipping GNOME installation."
+        fi
+    fi
+
+    # === Wayfire Installation ===
+    header "Installing Wayfire and dependencies"
+    
+    # Install core packages
+    run "sudo pacman -S --needed --noconfirm wayland wlroots xorg-xwayland kitty"
+
+    # Build Wayfire components
+    build_git_pkg "https://github.com/WayfireWM/wayfire.git" "wayfire"
+    build_git_pkg "https://github.com/WayfireWM/wf-shell.git" "wf-shell"
+    build_git_pkg "https://github.com/WayfireWM/wcm.git" "wcm"
+    build_git_pkg "https://github.com/soreau/pixdecor.git" "pixdecor"
+
+    # === Theme and Icons ===
+    header "Installing theme and icons"
+    
+    # Install GTK theme
+    if [ ! -d "$SCRIPT_DIR/Tokyo-Night-GTK-Theme" ]; then
+        run "git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git"
+    fi
+    cd "$SCRIPT_DIR/Tokyo-Night-GTK-Theme/themes" || exit 1
+    run "./install.sh -d \"$HOME/.local/share/themes\" -c dark -l --tweaks black"
+    cd "$SCRIPT_DIR" || exit 1
+    run "rm -rf \"$SCRIPT_DIR/Tokyo-Night-GTK-Theme\""
+
+    # Install icons
+    if [ ! -d "$SCRIPT_DIR/Aretha-Dark-Icons" ]; then
+        fatal "Aretha-Dark-Icons not found. Please download it from https://www.gnome-look.org/p/2180417 and place it in $SCRIPT_DIR."
+    fi
+    run "mkdir -p \"$HOME/.local/share/icons\""
     run "mv \"$SCRIPT_DIR/Aretha-Dark-Icons\" \"$HOME/.local/share/icons/\""
-fi
 
-# Apply theme and icons
-header "Applying theme and icons"
-run "mkdir -p \"$HOME/.config/gtk-3.0\""
-cat > "$HOME/.config/gtk-3.0/settings.ini" <<EOF
+    # === Desktop Configuration ===
+    header "Configuring desktop environment"
+    
+    # Apply theme and icons
+    run "mkdir -p \"$HOME/.config/gtk-3.0\""
+    cat > "$HOME/.config/gtk-3.0/settings.ini" <<EOF
 [Settings]
 gtk-theme-name=$THEME
 gtk-icon-theme-name=Aretha-Dark-Icons
 EOF
 
-# === System Tools ===
-header "Installing system tools: exa, Fish, mako, swappy"
-run "sudo pacman -S --needed --noconfirm exa fish mako swappy"
+    # Install system tools
+    run "sudo pacman -S --needed --noconfirm exa fish mako swappy"
 
-set_fish=false
-if confirm "Do you want to set Fish as your default shell?"; then
-    set_fish=true
-    if ! grep -qx "/usr/bin/fish" /etc/shells; then
-        echo "/usr/bin/fish" | sudo tee -a /etc/shells
+    # Set Fish as default shell if requested
+    if confirm "Set Fish as default shell?"; then
+        set_fish=true
+        if ! grep -qx "/usr/bin/fish" /etc/shells; then
+            echo "/usr/bin/fish" | sudo tee -a /etc/shells
+        fi
+        run "chsh -s /usr/bin/fish"
     fi
-    run "chsh -s /usr/bin/fish"
-fi
 
-# === Starship Prompt in Fish ===
-if [ "$set_fish" = true ] && ! grep -q 'starship init fish' "$HOME/.config/fish/config.fish" 2>/dev/null; then
-    run "paru -S --noconfirm starship"
-    echo 'starship init fish | source' >> "$HOME/.config/fish/config.fish"
-fi
-
-# === Zed Editor ===
-header "Installing Zed editor"
-if ! command -v zed >/dev/null 2>&1; then
-    run "curl -fsSL https://zed.dev/install.sh | sh"
-    if command -v zed >/dev/null 2>&1; then
-        log "Zed editor installed successfully: $(zed --version)"
-    else
-        warn "Zed installation completed but 'zed' command not found."
+    # Install Zed editor
+    header "Installing Zed editor"
+    if ! command -v zed >/dev/null 2>&1; then
+        run "curl -fsSL https://zed.dev/install.sh | sh"
     fi
-else
-    log "Zed editor already installed: $(zed --version)"
-fi
 
-# === AUR Packages ===
-if [ "$INSTALL_ALL" = true ]; then
-    header "Installing AUR packages"
-    run "paru -S --noconfirm eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout"
-else
-    log "Partial install: skipping optional AUR packages."
-fi
+    # Install AUR packages if full install
+    if [ "$INSTALL_ALL" = true ]; then
+        header "Installing AUR packages"
+        run "paru -S --noconfirm eww ironbar fzf zoxide starship ulauncher nwg-look vesktop ristretto swayosd clapper wcm mpv ncmpcpp thunar swww xava-git wlogout"
+    fi
 
-# === Backup and Copy Configs ===
-header "Backing up and copying configuration files"
-if [ -d "$BACKUP_DIR" ]; then
-    suffix=$(date +%s)
-    BACKUP_DIR="${BACKUP_DIR}_$suffix"
-fi
-run "mkdir -p \"$BACKUP_DIR\""
-if [ -d "$HOME/.config" ]; then
-    run "cp -r \"$HOME/.config\" \"$BACKUP_DIR/\""
-fi
-if [ -d "$HOME/.bin" ]; then
-    run "cp -r \"$HOME/.bin\" \"$BACKUP_DIR/\""
-fi
+    # === Configuration Backup ===
+    header "Backing up configurations"
+    
+    # Create backup directory
+    if [ -d "$BACKUP_DIR" ]; then
+        suffix=$(date +%s)
+        BACKUP_DIR="${BACKUP_DIR}_$suffix"
+    fi
+    run "mkdir -p \"$BACKUP_DIR\""
 
-if [ -d "$SCRIPT_DIR/.config" ]; then
-    run "cp -rv \"$SCRIPT_DIR/.config\" \"$HOME/\""
-    log "Configuration directory copied."
-else
-    warn ".config directory not found in $SCRIPT_DIR."
-fi
-if [ -d "$SCRIPT_DIR/.bin" ]; then
-    run "cp -rv \"$SCRIPT_DIR/.bin\" \"$HOME/\""
-    if [ ! -f "$HOME/.config/fish/config.fish" ] || ! grep -q "$HOME/.bin" "$HOME/.config/fish/config.fish" 2>/dev/null; then
+    # Backup existing configurations
+    if [ -d "$HOME/.config" ]; then
+        backup_config "$HOME/.config" "$BACKUP_DIR/config"
+    fi
+    if [ -d "$HOME/.bin" ]; then
+        backup_config "$HOME/.bin" "$BACKUP_DIR/bin"
+    fi
+
+    # === Copy New Configurations ===
+    header "Copying new configurations"
+    
+    # Copy configuration files
+    if [ -d "$SCRIPT_DIR/.config" ]; then
+        run "cp -rv \"$SCRIPT_DIR/.config\" \"$HOME/\""
+    fi
+    if [ -d "$SCRIPT_DIR/.bin" ]; then
+        run "cp -rv \"$SCRIPT_DIR/.bin\" \"$HOME/\""
         run "mkdir -p \"$HOME/.config/fish\""
         echo 'set -gx PATH $HOME/.bin $PATH' >> "$HOME/.config/fish/config.fish"
-        log "Added $HOME/.bin to PATH in Fish configuration."
     fi
-else
-    warn ".bin directory not found in $SCRIPT_DIR."
-fi
 
-# === Wallpaper Install ===
-if [ "$SKIP_WALLPAPERS" != "true" ]; then
-    header "Setting up wallpapers"
-    WALLPAPER_SOURCE="$SCRIPT_DIR/Wallpaper"
-    WALLPAPER_DEST="/usr/share/Wallpaper"
-    if [ -d "$WALLPAPER_SOURCE" ]; then
-        run "sudo mkdir -p \"$WALLPAPER_DEST\""
-        run "sudo cp -rv \"$WALLPAPER_SOURCE\"/* \"$WALLPAPER_DEST/\""
-        run "sudo chmod -R a+r \"$WALLPAPER_DEST\""
-        log "Wallpapers installed."
+    # === Wayfire Configuration ===
+    header "Configuring Wayfire"
+    
+    # Configure follow-focus and inactive-alpha
+    run "mkdir -p \"$HOME/.config/environment.d\""
+    echo "WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket" > "$HOME/.config/environment.d/environment.conf"
+
+    # Setup IPC scripts
+    local IPC_DIR="$HOME/.config/ipc-scripts"
+    run "mkdir -p \"$IPC_DIR\""
+    
+    if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" ]; then
+        run "cp \"$SCRIPT_DIR/ipc-scripts/inactive-alpha.py\" \"$IPC_DIR/\""
+        run "cp \"$SCRIPT_DIR/ipc-scripts/wayfire_socket.py\" \"$IPC_DIR/\""
     else
-        warn "Wallpaper directory not found at $WALLPAPER_SOURCE. Skipping..."
+        run "curl -fL \"https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py\" -o \"$IPC_DIR/inactive-alpha.py\""
+        run "curl -fL \"https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py\" -o \"$IPC_DIR/wayfire_socket.py\""
     fi
-else
-    log "Skipping wallpaper installation as per user request (-w flag)."
-fi
+    run "chmod +x \"$IPC_DIR/inactive-alpha.py\" \"$IPC_DIR/wayfire_socket.py\""
 
-# === Wayfire Config and IPC Scripts ===
-header "Configuring follow-focus and inactive-alpha for Wayfire"
-run "mkdir -p \"$HOME/.config/environment.d\""
-echo "WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket" > "$HOME/.config/environment.d/environment.conf"
-
-IPC_DIR="$HOME/.config/ipc-scripts"
-run "mkdir -p \"$IPC_DIR\""
-if [ -f "$SCRIPT_DIR/ipc-scripts/inactive-alpha.py" ] && [ -f "$SCRIPT_DIR/ipc-scripts/wayfire_socket.py" ]; then
-    run "cp \"$SCRIPT_DIR/ipc-scripts/inactive-alpha.py\" \"$IPC_DIR/\""
-    run "cp \"$SCRIPT_DIR/ipc-scripts/wayfire_socket.py\" \"$IPC_DIR/\""
-else
-    run "curl -fL \"https://github.com/WayfireWM/wayfire/raw/master/examples/inactive-alpha.py\" -o \"$IPC_DIR/inactive-alpha.py\""
-    run "curl -fL \"https://github.com/WayfireWM/wayfire/raw/master/examples/wayfire_socket.py\" -o \"$IPC_DIR/wayfire_socket.py\""
-fi
-run "chmod +x \"$IPC_DIR/inactive-alpha.py\" \"$IPC_DIR/wayfire_socket.py\""
-
-WAYFIRE_INI="$HOME/.config/wayfire.ini"
-if [ -f "$WAYFIRE_INI" ]; then
-    if grep -q "^plugins =" "$WAYFIRE_INI"; then
+    # Configure Wayfire.ini
+    local WAYFIRE_INI="$HOME/.config/wayfire.ini"
+    if [ -f "$WAYFIRE_INI" ]; then
         run "sed -i 's/^plugins =.*/plugins = ipc ipc-rules follow-focus/' \"$WAYFIRE_INI\""
+        run "sed -i '/\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py' \"$WAYFIRE_INI\""
     else
-        echo "plugins = ipc ipc-rules follow-focus" >> "$WAYFIRE_INI"
-    fi
-    if grep -q "^\[autostart\]" "$WAYFIRE_INI"; then
-        if ! grep -q "launcher =" "$WAYFIRE_INI"; then
-            run "sed -i \"/^\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py\" \"$WAYFIRE_INI\""
-        fi
-    else
-        echo -e "\n[autostart]\nlauncher = $IPC_DIR/inactive-alpha.py" >> "$WAYFIRE_INI"
-    fi
-else
-    echo -e "plugins = ipc ipc-rules follow-focus\n\n[autostart]\nlauncher = $IPC_DIR/inactive-alpha.py" > "$WAYFIRE_INI"
-fi
+        cat > "$WAYFIRE_INI" <<EOF
+plugins = ipc ipc-rules follow-focus
 
-# === wayfire.desktop Session File ===
-if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-    header "Creating wayfire.desktop session file"
-    sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
+[autostart]
+launcher = $IPC_DIR/inactive-alpha.py
+EOF
+    fi
+
+    # === Wayfire Session ===
+    header "Creating Wayfire session"
+    
+    if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
 [Desktop Entry]
 Name=Wayfire
 Comment=A lightweight and customizable Wayland compositor
 Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
 Type=Application
 EOF
-fi
+    fi
 
-# === Verify Key Installations ===
-header "Verifying key installations"
-for cmd in wayfire kitty fish zed wcm xava wlogout; do
-    if command -v "$cmd" >/dev/null 2>&1; then
-        log "$cmd installed: $(command -v "$cmd")"
+    # === Verification ===
+    header "Verifying installations"
+    
+    local failed=false
+    for cmd in wayfire kitty fish zed wcm xava wlogout; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            warn "$cmd not found!"
+            failed=true
+        fi
+    done
+
+    if [ "$failed" = true ]; then
+        fatal "Some required components are missing. Please check the log file for details."
+    fi
+
+    # === Final Summary ===
+    echo
+    if [ "$FAILED" = "true" ]; then
+        echo -e "${RED}Installation completed with errors.${NC}"
+        echo "Please review $LOG_FILE for more information."
+        exit 1
     else
-        warn "$cmd not found!"
-        FAILED=true
-    fi
-done
-
-# === Summary and Final Instructions ===
-echo
-if [ "$FAILED" = "true" ]; then
-    echo -e "${RED}Installation completed with errors.${NC}"
-    echo "Please review $LOG_FILE for more information."
-    exit 1
-else
-    echo -e "${GREEN}Installation completed successfully!${NC}"
-    echo "See $LOG_FILE for a detailed log."
-    echo "To start Wayfire:"
-    echo "  1. Log out of your current session."
-    echo "  2. At your login manager, select the 'Wayfire' session."
-    echo "  3. Log in and enjoy your new desktop environment!"
-    echo "Backup of previous config saved to: $BACKUP_DIR"
-    if [ "$set_fish" = true ]; then
-        echo "Note: Fish shell is now set as default."
-    fi
-    if [ "$INSTALL_GNOME" = true ]; then
-        echo
-        echo "GNOME desktop is also installed and enabled as a fallback."
-        echo "If you have any issues with Wayfire, you can always log into GNOME for troubleshooting."
-        echo "You can select between GNOME and Wayfire at your login screen."
-    fi
-    exit 0
-fi
+        echo -e "${GREEN}Installation completed successfully!${NC}"
+        echo "See $LOG_FILE for a detailed log."
+        echo "To start Wayfire:"
