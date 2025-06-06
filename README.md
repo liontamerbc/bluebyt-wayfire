@@ -22,9 +22,45 @@
 
 **GTK4 Apps, Aretha-Dark-Icons, and Pixdecor**
 
-![GTK4, Pixdecor](https://github.com/user-attachments/assets/58606e37-6f79-4ad9-b1cf-20cef66b1213)
+---
 
-[▶️ Install Wayfire on Youtube](https://youtu.be/abtU54uMXH0)
+## 🚀 Quick Start
+
+```sh
+git clone https://github.com/liontamerbc/bluebyt-wayfire.git
+cd bluebyt-wayfire
+./installer.sh
+```
+
+### GNOME Desktop Option
+
+You can install GNOME as a fallback desktop by passing the `-g` or `--gnome` option:
+
+```sh
+./installer.sh -g        # or
+./installer.sh --gnome
+```
+
+---
+
+## ▶️ Usage
+
+1. Log out of your current session.
+2. At your login manager (e.g., GDM), select the "Wayfire" session.
+3. Log in and enjoy your new desktop environment!
+
+---
+
+## 💡 Why install GNOME as a fallback?
+
+Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong.  
+**The installer allows you to automatically install GNOME (`-g` or `--gnome`) as a stable, full-featured desktop for troubleshooting and recovery.**
+
+**Benefits:**
+- Reliable fallback: Always be able to log into a working desktop if Wayfire fails.
+- Graphical tools for system/network/bluetooth/display.
+- Improved hardware support (drivers, firmware).
+- Safe for experimentation: you can always return to GNOME if you break your Wayfire config.
 
 ---
 
@@ -50,43 +86,17 @@
 
 ---
 
-## 🖥️ Prerequisites
+## 📸 Screenshots
 
-- Arch Linux installed (minimal or with your preferred desktop environment).
+**Wayfire with Pixdecor**
 
----
+![Wayfire with Pixdecor](https://github.com/user-attachments/assets/6ce465da-e8a9-45d5-a87c-8932cd7ae366)
 
-## 🚀 Quick Start
+**GTK4 Apps, Aretha-Dark-Icons, and Pixdecor**
 
-**Recommended: Automated Installer**
+![GTK4, Pixdecor](https://github.com/user-attachments/assets/58606e37-6f79-4ad9-b1cf-20cef66b1213)
 
-```sh
-git clone https://github.com/liontamerbc/bluebyt-wayfire.git
-cd bluebyt-wayfire
-./installer.sh
-```
-
-### GNOME Desktop Option
-
-You can install GNOME as a fallback desktop by passing the `-g` or `--gnome` option:
-
-```sh
-./installer.sh -g        # or
-./installer.sh --gnome
-```
-
----
-
-## 📝 Manual Installation
-
-Here's a summary of what the installer does:
-
-1. Installs dependencies and core packages
-2. Builds Wayfire and essential components from source
-3. Installs GPU, CPU, Wi-Fi, and Bluetooth drivers
-4. Sets up themes, icons, and configurations
-
-For detailed installation steps, see the [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki).
+[▶️ Install Wayfire on Youtube](https://youtu.be/abtU54uMXH0)
 
 ---
 
@@ -118,27 +128,6 @@ The installer automatically handles hardware-specific configurations, including:
 - System-specific dependencies
 
 These files are automatically backed up by the installer, so you can safely experiment with changes. If you need to revert to default settings, simply restore from the backup.
-
----
-
-## ▶️ Usage
-
-1. Log out of your current session.
-2. At your login manager (e.g., GDM), select the "Wayfire" session.
-3. Log in and enjoy your new desktop environment!
-
----
-
-## 💡 Why install GNOME as a fallback?
-
-Wayfire is a powerful compositor, but a minimal system may leave you without a graphical fallback if something goes wrong.  
-**The installer allows you to automatically install GNOME (`-g` or `--gnome`) as a stable, full-featured desktop for troubleshooting and recovery.**
-
-**Benefits:**
-- Reliable fallback: Always be able to log into a working desktop if Wayfire fails.
-- Graphical tools for system/network/bluetooth/display.
-- Improved hardware support (drivers, firmware).
-- Safe for experimentation: you can always return to GNOME if you break your Wayfire config.
 
 ---
 
