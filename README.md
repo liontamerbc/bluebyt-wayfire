@@ -131,7 +131,7 @@ No manual action required.
 
 - [Bluebyt (Bruno) – Workflow video](https://youtu.be/5dzgKCZbSlA)
 - [Wayfire wiki](https://github.com/WayfireWM/wayfire/wiki) for documentation and troubleshooting
-- Original [Wayfire-dots](https://github.com/bluebyt/Wayfire-dots.git) @bluebyt/wayfire-dots
+- Original [Wayfire-dots](https://github.com/bluebyt/Wayfire-dots.git) by [bluebyt] (https://gitHub.com/bluebyt)
 
 ---
 
