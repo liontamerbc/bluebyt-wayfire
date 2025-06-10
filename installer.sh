@@ -100,23 +100,6 @@ build_git_pkg() {
     run "rm -rf \"$build_dir\""
 }
 
-check_space() {
-    local required_mb="$1"
-    local available_mb
-    available_mb=$(df -m / | tail -1 | awk '{print $4}')
-    
-    if [ "$available_mb" -lt "$required_mb" ]; then
-        fatal "Insufficient disk space. Required: ${required_mb}MB, Available: ${available_mb}MB"
-    fi
-    log "Disk space check passed. Available: ${available_mb}MB"
-}
-        run "sudo ninja -C build install"
-    fi
-    
-    cd "$SCRIPT_DIR" || exit 1
-    run "rm -rf \"$build_dir\""
-}
-
 retry() {
     local cmd="$1"
     local retries=${2:-$MAX_RETRIES}
