@@ -76,6 +76,47 @@ progress() {
 }
 
 # === Utility Functions ===
+build_git_pkg() {
+    local repo="$1"
+    local pkg="$2"
+    local build_dir="$SCRIPT_DIR/build_$pkg"
+    
+    if [ -d "$build_dir" ]; then
+        run "rm -rf \"$build_dir\""
+    fi
+    
+    run "git clone $repo $build_dir"
+    cd "$build_dir" || exit 1
+    
+    if [ -f "PKGBUILD" ]; then
+        run "makepkg -si --noconfirm"
+    else
+        run "meson build"
+        run "ninja -C build"
+        run "sudo ninja -C build install"
+    fi
+    
+    cd "$SCRIPT_DIR" || exit 1
+    run "rm -rf \"$build_dir\""
+}
+
+check_space() {
+    local required_mb="$1"
+    local available_mb
+    available_mb=$(df -m / | tail -1 | awk '{print $4}')
+    
+    if [ "$available_mb" -lt "$required_mb" ]; then
+        fatal "Insufficient disk space. Required: ${required_mb}MB, Available: ${available_mb}MB"
+    fi
+    log "Disk space check passed. Available: ${available_mb}MB"
+}
+        run "sudo ninja -C build install"
+    fi
+    
+    cd "$SCRIPT_DIR" || exit 1
+    run "rm -rf \"$build_dir\""
+}
+
 retry() {
     local cmd="$1"
     local retries=${2:-$MAX_RETRIES}
@@ -165,6 +206,14 @@ run() {
 }
 
 # === User Interaction ===
+header() {
+    local title="$1"
+    echo
+    echo -e "${BLUE}=== $title ===${NC}"
+    echo
+    log "Starting $title"
+}
+
 confirm() {
     if [ "$AUTO_YES" = true ] || [ "$DRY_RUN" = true ]; then
         log "[AUTO-YES/DRY-RUN] Would prompt: $*"
@@ -197,7 +246,33 @@ require_bin() {
     local retries=${3:-$MAX_RETRIES}
     
     if ! command -v "$cmd" >/dev/null 2>&1; then
-        fatal "$cmd is required but not installed."
+        fatal "$cmd is required but not installed. Attempting to install now..."
+        if [ "$AUTO_YES" = true ]; then
+            run "sudo pacman -S --noconfirm $cmd"
+        else
+            if confirm "The required package '$cmd' is not installed. Would you like to install it now?"; then
+                run "sudo pacman -S --noconfirm $cmd"
+            else
+                fatal "Cannot continue without $cmd. Please install it manually and try again."
+            fi
+        fi
+        
+        # Verify installation
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            fatal "Failed to install $cmd. Please check the log file for details."
+        fi
+        
+        # If version check is requested
+        if [ -n "$ver" ]; then
+            local installed_ver
+            installed_ver=$(command -v "$cmd" --version 2>/dev/null | head -n1)
+            if [ -z "$installed_ver" ]; then
+                warn "Could not determine version of $cmd"
+            else
+                log "Installed version: $installed_ver"
+            fi
+        fi
+        return 0
     fi
     
     if [ -n "$ver" ]; then
@@ -568,6 +643,7 @@ EOF
         run "sed -i '/\[autostart\]/a launcher = $IPC_DIR/inactive-alpha.py' \"$WAYFIRE_INI\""
     else
         cat > "$WAYFIRE_INI" <<EOF
+[Settings]
 plugins = ipc ipc-rules follow-focus
 
 [autostart]
@@ -612,4 +688,52 @@ EOF
     else
         echo -e "${GREEN}Installation completed successfully!${NC}"
         echo "See $LOG_FILE for a detailed log."
-        echo "To start Wayfire:"
+        echo "To start Wayfire:" && echo "    1. Log out of your current session" && echo "    2. Select 'Wayfire' from your display manager's session list" && echo "    3. Log back in to start Wayfire"
+        exit 0
+    fi
+}
+plugins = ipc ipc-rules follow-focus
+
+[autostart]
+launcher = $IPC_DIR/inactive-alpha.py
+EOF
+    fi
+
+    # === Wayfire Session ===
+    header "Creating Wayfire session"
+    
+    if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
+[Desktop Entry]
+Name=Wayfire
+Comment=A lightweight and customizable Wayland compositor
+Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
+Type=Application
+EOF
+    fi
+
+    # === Verification ===
+    header "Verifying installations"
+    
+    local failed=false
+    for cmd in wayfire kitty fish zed wcm xava wlogout; do
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            warn "$cmd not found!"
+            failed=true
+        fi
+    done
+
+    if [ "$failed" = true ]; then
+        fatal "Some required components are missing. Please check the log file for details."
+    fi
+
+    # === Final Summary ===
+    echo
+    if [ "$FAILED" = "true" ]; then
+        echo -e "${RED}Installation completed with errors.${NC}"
+        echo "Please review $LOG_FILE for more information."
+        exit 1
+    else
+        echo -e "${GREEN}Installation completed successfully!${NC}"
+        echo "See $LOG_FILE for a detailed log."
+        echo "To start Wayfire:" && echo "    1. Log out of your current session" && echo "    2. Select 'Wayfire' from your display manager's session list" && echo "    3. Log back in to start Wayfire"
