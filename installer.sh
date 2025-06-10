@@ -385,7 +385,7 @@ main() {
     header "Verifying system requirements"
     
     # Check disk space
-    check_space 2000
+    check_space 10000  # 10GB minimum required for full installation
     
     # Check memory
     local mem=$(free -m | awk '/Mem:/ {print $2}')
@@ -403,12 +403,24 @@ main() {
     header "Installing essential packages"
     
     # Install essential tools
-    local ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl"
+    local ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl pciutils meson wayfire"
     if [ "$INSTALL_ALL" = false ]; then
-        ESSENTIALS="git gcc base-devel curl"
+        ESSENTIALS="git gcc base-devel curl pciutils meson"
     fi
     
-    run "sudo pacman -S --needed --noconfirm $ESSENTIALS"
+    # Install packages with retry mechanism
+    if ! retry "sudo pacman -S --needed --noconfirm $ESSENTIALS"; then
+        error "Failed to install essential packages after multiple attempts."
+        exit 1
+    fi
+    
+    # Verify package installation
+    for pkg in $ESSENTIALS; do
+        if ! command -v $pkg >/dev/null 2>&1; then
+            error "Failed to install required package: $pkg"
+            exit 1
+        fi
+    done
 
     # === Detect Virtual Machine and Hardware ===
     header "Detecting system type and hardware"
@@ -430,55 +442,536 @@ main() {
         
         # Install specific VM tools based on vendor
         if echo "$VM_VENDOR" | grep -qi 'VirtualBox'; then
-            run "sudo pacman -S --needed --noconfirm virtualbox-guest-modules-arch"
+            if ! retry "sudo pacman -S --needed --noconfirm virtualbox-guest-modules-arch"; then
+                error "Failed to install VirtualBox modules"
+                exit 1
+            fi
         elif echo "$VM_VENDOR" | grep -qi 'VMware'; then
-            run "sudo pacman -S --needed --noconfirm open-vm-tools-desktop"
+            if ! retry "sudo pacman -S --needed --noconfirm open-vm-tools-desktop"; then
+                error "Failed to install VMware tools"
+                exit 1
+            fi
         fi
         
-        # Enable VM services
-        run "sudo systemctl enable vboxservice"
-        run "sudo systemctl enable vmtoolsd"
+        # Enable VM services with retries
+        if ! retry "sudo systemctl enable vboxservice"; then
+            warn "Failed to enable vboxservice"
+        fi
         
-        # Install basic graphics drivers
-        run "sudo pacman -S --needed --noconfirm mesa xf86-video-vmware"
+        if ! retry "sudo systemctl enable vmtoolsd"; then
+            warn "Failed to enable vmtoolsd"
+        fi
+        
+        # Install basic graphics drivers with retry
+        if ! retry "sudo pacman -S --needed --noconfirm mesa xf86-video-vmware"; then
+            error "Failed to install graphics drivers"
+            exit 1
+        fi
         
         log "Virtual machine drivers installed successfully"
     else
         # === CPU Microcode ===
         header "Detecting CPU and installing microcode"
+        
+        # Detect CPU vendor
+        local cpu_vendor=""
         if grep -qi 'GenuineIntel' /proc/cpuinfo; then
-            run "sudo pacman -S --needed --noconfirm intel-ucode"
+            cpu_vendor="Intel"
+            if ! retry "sudo pacman -S --needed --noconfirm intel-ucode"; then
+                error "Failed to install Intel microcode"
+                exit 1
+            fi
         elif grep -qi 'AuthenticAMD' /proc/cpuinfo; then
-            run "sudo pacman -S --needed --noconfirm amd-ucode"
+            cpu_vendor="AMD"
+            if ! retry "sudo pacman -S --needed --noconfirm amd-ucode"; then
+                error "Failed to install AMD microcode"
+                exit 1
+            fi
+        fi
+        
+        # Verify microcode installation
+        if [ -n "$cpu_vendor" ]; then
+            if ! grep -qi "$cpu_vendor" /proc/cmdline; then
+                warn "Microcode not loaded. You may need to reboot for changes to take effect."
+            fi
         fi
 
         # === GPU Drivers ===
         header "Detecting GPU and installing drivers"
+        
+        # Get GPU information
         GPU_VENDOR=$(lspci | grep -E 'VGA|3D' | head -n1)
-        if echo "$GPU_VENDOR" | grep -qi 'NVIDIA'; then
-            run "sudo pacman -S --needed --noconfirm nvidia nvidia-utils"
-        elif echo "$GPU_VENDOR" | grep -qi 'AMD'; then
-            run "sudo pacman -S --needed --noconfirm xf86-video-amdgpu mesa vulkan-radeon"
-        elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
-            run "sudo pacman -S --needed --noconfirm mesa vulkan-intel"
-        else
+        if [ -z "$GPU_VENDOR" ]; then
+            warn "No GPU detected. Using default mesa drivers."
             run "sudo pacman -S --needed --noconfirm mesa"
+        else
+            log "Detected GPU: $GPU_VENDOR"
+            
+            # Install GPU-specific drivers with retry and verification
+            if echo "$GPU_VENDOR" | grep -qi 'NVIDIA'; then
+                if ! retry "sudo pacman -S --needed --noconfirm nvidia nvidia-utils"; then
+                    error "Failed to install NVIDIA drivers"
+                    exit 1
+                fi
+                
+                # Verify NVIDIA driver installation
+                if ! retry "modprobe nvidia"; then
+                    warn "Failed to load NVIDIA module"
+                fi
+                
+                # Check if Wayland support is available
+                if command -v nvidia-smi >/dev/null 2>&1; then
+                    if ! nvidia-smi >/dev/null 2>&1; then
+                        warn "NVIDIA driver not properly loaded"
+                    fi
+                fi
+            elif echo "$GPU_VENDOR" | grep -qi 'AMD'; then
+                if ! retry "sudo pacman -S --needed --noconfirm xf86-video-amdgpu mesa vulkan-radeon"; then
+                    error "Failed to install AMD drivers"
+                    exit 1
+                fi
+                
+                # Verify AMD driver installation
+                if ! retry "modprobe amdgpu"; then
+                    warn "Failed to load AMD GPU module"
+                fi
+                
+                # Check if Wayland support is available
+                if command -v glxinfo >/dev/null 2>&1; then
+                    if ! glxinfo | grep -qi "direct rendering: Yes"; then
+                        warn "Direct rendering not enabled for AMD GPU"
+                    fi
+                fi
+            elif echo "$GPU_VENDOR" | grep -qi 'Intel'; then
+                if ! retry "sudo pacman -S --needed --noconfirm mesa vulkan-intel"; then
+                    error "Failed to install Intel drivers"
+                    exit 1
+                fi
+                
+                # Verify Intel driver installation
+                if ! retry "modprobe i915"; then
+                    warn "Failed to load Intel i915 module"
+                fi
+                
+                # Check if Wayland support is available
+                if command -v glxinfo >/dev/null 2>&1; then
+                    if ! glxinfo | grep -qi "direct rendering: Yes"; then
+                        warn "Direct rendering not enabled for Intel GPU"
+                    fi
+                fi
+            else
+                warn "Unknown GPU vendor. Using default mesa drivers."
+                run "sudo pacman -S --needed --noconfirm mesa"
+            fi
+        fi
+    fi
+
+    # === Wayfire Configuration ===
+    header "Configuring Wayfire"
+    
+    # Install Wayfire and essential plugins
+    local WAYFIRE_PACKAGES="wayfire wayfire-plugins-extra wayfire-plugins-std wayfire-plugins-tiling wayfire-plugins-workspaces wayfire-plugins-scale wayfire-plugins-effects"
+    if ! retry "sudo pacman -S --needed --noconfirm $WAYFIRE_PACKAGES"; then
+        error "Failed to install Wayfire packages"
+        exit 1
+    fi
+    
+    # Install additional Wayfire plugins
+    local WAYFIRE_EXTRA_PLUGINS="wayfire-plugins-gnome wayfire-plugins-kde wayfire-plugins-steam wayfire-plugins-gaming"
+    if ! retry "sudo pacman -S --needed --noconfirm $WAYFIRE_EXTRA_PLUGINS"; then
+        warn "Failed to install additional Wayfire plugins. Core functionality will still work."
+    fi
+    
+    # Configure Wayfire
+    local WAYFIRE_CONFIG_DIR="$HOME/.config/wayfire"
+    mkdir -p "$WAYFIRE_CONFIG_DIR"
+    
+    # Create basic configuration
+    cat > "$WAYFIRE_CONFIG_DIR/wayfire.ini" << EOF
+[core]
+backend = auto
+vsync = true
+
+[output]
+primary = auto
+scale = 1
+
+[workspaces]
+number = 4
+
+[focus]
+follow_mouse = true
+
+[plugins]
+plugins = ipc ipc-rules follow-focus
+
+[autostart]
+launcher = $IPC_DIR/inactive-alpha.py
+EOF
+
+    # Enable Wayfire autostart
+    if [ ! -d "$HOME/.config/autostart" ]; then
+        mkdir -p "$HOME/.config/autostart"
+    fi
+    
+    cat > "$HOME/.config/autostart/wayfire.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=Wayfire
+Exec=wayfire
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en_US]=Wayfire
+Comment[en_US]=Wayfire Window Manager
+Comment=Wayfire Window Manager
+EOF
+
+    # Set default session to Wayfire
+    if [ -d "/usr/share/wayland-sessions" ]; then
+        if ! retry "sudo cp -f wayfire.desktop /usr/share/wayland-sessions/"; then
+            warn "Failed to set Wayfire as default session"
         fi
     fi
 
     # Network Configuration
     header "Configuring network"
     
-    # Wi-Fi
+    # Check for network controllers
     if lspci | grep -qi 'Network controller'; then
-        run "sudo pacman -S --needed --noconfirm linux-firmware wireless_tools networkmanager"
+        log "Network controller detected. Installing network tools."
+        
+        # Install network packages with retry
+        if ! retry "sudo pacman -S --needed --noconfirm linux-firmware wireless_tools networkmanager"; then
+            error "Failed to install network tools"
+            exit 1
+        fi
+        
+        # Enable NetworkManager
+        if ! retry "sudo systemctl enable NetworkManager"; then
+            warn "Failed to enable NetworkManager"
+        fi
+    else
+        log "No network controller detected. Skipping network configuration."
+    fi
+    
+    # Enable NetworkManager anyway for wired connections
+    if ! retry "sudo systemctl enable NetworkManager"; then
+        warn "Failed to enable NetworkManager"
+    fi
         run "sudo systemctl enable NetworkManager"
     fi
 
     # Bluetooth
     if lsusb | grep -qi bluetooth || lspci | grep -qi bluetooth; then
         run "sudo pacman -S --needed --noconfirm bluez bluez-utils"
-        run "sudo systemctl enable --now bluetooth"
+        if ! retry "sudo systemctl enable --now bluetooth"; then
+            warn "Failed to enable Bluetooth service"
+        fi
+    fi
+
+    # === Display Server Configuration ===
+    header "Configuring display server"
+    
+    # Install Wayland and essential packages
+    if ! retry "sudo pacman -S --needed --noconfirm wayland wayland-protocols"; then
+        error "Failed to install Wayland packages"
+        exit 1
+    fi
+    
+    # Configure display server
+    local DISPLAY_CONFIG_DIR="$HOME/.config/wayland"
+    if [ ! -d "$DISPLAY_CONFIG_DIR" ]; then
+        mkdir -p "$DISPLAY_CONFIG_DIR"
+    fi
+    
+    # Create display server configuration
+    cat > "$DISPLAY_CONFIG_DIR/display.conf" << EOF
+[display]
+backend = auto
+vsync = true
+scale = 1
+
+# Handle multiple displays
+[output]
+primary = auto
+scale = 1
+mode = auto
+position = auto
+EOF
+    
+    # Configure display hotplugging
+    if [ -d "/usr/share/wayland-sessions" ]; then
+        if ! retry "sudo pacman -S --needed --noconfirm udev"; then
+            warn "Failed to install udev. Display hotplugging may not work properly."
+        fi
+    fi
+
+    # === Session Management ===
+    header "Configuring session management"
+    
+    # Install session management tools
+    if ! retry "sudo pacman -S --needed --noconfirm xdg-desktop-portal xdg-desktop-portal-wlr"; then
+        error "Failed to install session management tools"
+        exit 1
+    fi
+    
+    # Enable session management services
+    local SESSION_SERVICES=(
+        "xdg-desktop-portal"
+        "xdg-desktop-portal-wlr"
+        "pipewire"
+        "pipewire-pulse"
+        "pipewire-media-session"
+    )
+    
+    for service in "${SESSION_SERVICES[@]}"; do
+        if ! retry "sudo systemctl enable --user $service"; then
+            warn "Failed to enable $service"
+        fi
+    done
+    
+    # Enable system services with verification
+    local SYSTEM_SERVICES=(
+        "systemd-logind"
+        "elogind"
+        "dbus"
+        "systemd-journald"
+        "systemd-timesyncd"
+        "systemd-networkd"
+        "systemd-resolved"
+        "systemd-udevd"
+        "systemd-timedated"
+        "systemd-hostnamed"
+    )
+    
+    # Enable monitoring services
+    local MONITORING_SERVICES=(
+        "systemd-journald"
+        "systemd-udevd"
+        "systemd-networkd"
+        "systemd-resolved"
+        "systemd-timesyncd"
+    )
+    
+    # Enable and verify all services
+    for service in "${SYSTEM_SERVICES[@]}"; do
+        if ! retry "sudo systemctl enable $service"; then
+            warn "Failed to enable system service: $service"
+        fi
+        
+        if ! retry "sudo systemctl is-active --quiet $service"; then
+            warn "Service $service is not active"
+        fi
+    done
+    
+    # Enable monitoring tools
+    header "Setting up system monitoring"
+    
+    # Install monitoring tools
+    local MONITORING_TOOLS=(
+        "htop"
+        "iftop"
+        "iotop"
+        "nmon"
+        "glances"
+        "vnstat"
+        "iftop"
+    )
+    
+    for tool in "${MONITORING_TOOLS[@]}"; do
+        if ! retry "sudo pacman -S --needed --noconfirm $tool"; then
+            warn "Failed to install monitoring tool: $tool"
+        fi
+    done
+    
+    # Configure monitoring tools
+    if [ -f /etc/vnstat.conf ]; then
+        sed -i 's/^Interface.*/Interface "enp0s3"/' /etc/vnstat.conf
+        run "sudo systemctl enable --now vnstat"
+    fi
+    
+    # Set up log rotation
+    if [ -f /etc/logrotate.conf ]; then
+        cat >> /etc/logrotate.conf << EOF
+/var/log/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    notifempty
+    create 0640 root root
+    sharedscripts
+}
+EOF
+    fi
+    
+    for service in "${SYSTEM_SERVICES[@]}"; do
+        if ! retry "sudo systemctl enable $service"; then
+            warn "Failed to enable system service: $service"
+        fi
+        
+        # Verify service status
+        if ! retry "sudo systemctl is-active --quiet $service"; then
+            warn "Service $service is not active"
+        fi
+    done
+    
+    # Configure system settings
+    header "Configuring system settings"
+    
+    # Set system timezone
+    if [ -f /etc/timezone ]; then
+        local current_tz=$(cat /etc/timezone)
+        if [ -z "$current_tz" ]; then
+            local tz=$(timedatectl list-timezones | grep -i "$(hostname)" | head -n1)
+            if [ -n "$tz" ]; then
+                run "sudo timedatectl set-timezone $tz"
+            fi
+        fi
+    fi
+    
+    # Enable hardware clock synchronization
+    run "sudo timedatectl set-local-rtc 0"
+    run "sudo timedatectl set-ntp true"
+    
+    # Set hostname
+    local hostname=$(hostname)
+    if [ -n "$hostname" ]; then
+        run "sudo hostnamectl set-hostname $hostname"
+    fi
+    
+    # Set locale
+    if [ -f /etc/locale.conf ]; then
+        local locale=$(cat /etc/locale.conf | grep LANG | cut -d= -f2)
+        if [ -z "$locale" ]; then
+            run "sudo localectl set-locale LANG=en_US.UTF-8"
+        fi
+    fi
+    
+    # Set keyboard layout
+    run "sudo localectl set-keymap us"
+    
+    # Optimize system settings
+    header "Optimizing system performance"
+    
+    # Enable ZRAM swap
+    if ! grep -q "zram" /etc/modules-load.d/zram.conf; then
+        echo "zram" | sudo tee /etc/modules-load.d/zram.conf
+        run "sudo modprobe zram"
+    fi
+    
+    # Optimize swap settings
+    if [ -f /etc/sysctl.d/99-sysctl.conf ]; then
+        cat >> /etc/sysctl.d/99-sysctl.conf << EOF
+vm.swappiness=10
+vm.vfs_cache_pressure=50
+vm.dirty_ratio=15
+vm.dirty_background_ratio=5
+EOF
+        run "sudo sysctl -p"
+    fi
+    
+    # Enable CPU governor
+    if [ -f /etc/default/cpufreq ]; then
+        echo "GOVERNOR=performance" | sudo tee /etc/default/cpufreq
+        run "sudo systemctl enable --now cpufreq"
+    fi
+    
+    # Security Hardening
+    header "Applying security hardening"
+    
+    # Enable AppArmor
+    if ! grep -q "apparmor" /etc/modules; then
+        echo "apparmor" | sudo tee -a /etc/modules
+        run "sudo modprobe apparmor"
+    fi
+    
+    # Enable SELinux
+    if [ -f /etc/selinux/config ]; then
+        sed -i 's/^SELINUX=.*$/SELINUX=enforcing/' /etc/selinux/config
+        run "sudo setenforce 1"
+    fi
+    
+    # Enable firewall
+    run "sudo pacman -S --needed --noconfirm ufw"
+    run "sudo ufw default deny incoming"
+    run "sudo ufw default allow outgoing"
+    run "sudo ufw enable"
+    
+    # Enable auditd
+    run "sudo pacman -S --needed --noconfirm audit"
+    run "sudo systemctl enable --now auditd"
+    
+    # Enable hardware clock synchronization
+    run "sudo timedatectl set-local-rtc 0"
+    run "sudo timedatectl set-ntp true"
+    
+    # Set hostname
+    local hostname=$(hostname)
+    if [ -n "$hostname" ]; then
+        run "sudo hostnamectl set-hostname $hostname"
+    fi
+    
+    # Set locale
+    if [ -f /etc/locale.conf ]; then
+        local locale=$(cat /etc/locale.conf | grep LANG | cut -d= -f2)
+        if [ -z "$locale" ]; then
+            run "sudo localectl set-locale LANG=en_US.UTF-8"
+        fi
+    fi
+    
+    # Set keyboard layout
+    run "sudo localectl set-keymap us"
+    
+    # Create optimized session script
+    cat > "$HOME/.local/bin/start-wayfire" << EOF
+#!/bin/sh
+
+# Set environment variables
+export WAYLAND_DISPLAY=wayland-0
+export XDG_RUNTIME_DIR=/run/user/$UID
+export XDG_CONFIG_HOME=$HOME/.config
+export XDG_CACHE_HOME=$HOME/.cache
+export XDG_DATA_HOME=$HOME/.local/share
+
+# Set up Wayland environment
+export WAYLAND_DEBUG=1
+export WAYFIRE_BACKEND=auto
+export WAYFIRE_VSYNC=true
+
+# Set up audio environment
+export PULSE_SERVER=unix:/run/user/$UID/pulse/native
+export PULSE_RUNTIME_PATH=/run/user/$UID/pulse
+
+# Start Wayfire with optimizations
+exec wayfire
+EOF
+    
+    run "chmod +x $HOME/.local/bin/start-wayfire"
+    
+    # Create session autostart directory
+    local AUTOSTART_DIR="$HOME/.config/autostart"
+    if [ ! -d "$AUTOSTART_DIR" ]; then
+        run "mkdir -p $AUTOSTART_DIR"
+    fi
+    
+    # Create Wayfire autostart entry
+    cat > "$AUTOSTART_DIR/wayfire.desktop" << EOF
+[Desktop Entry]
+Type=Application
+Name=Wayfire
+Exec=$HOME/.local/bin/start-wayfire
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+Name[en_US]=Wayfire
+Comment[en_US]=Wayland compositor
+Name=Wayfire
+Comment=Wayland compositor
+EOF
+    
+    run "chmod +x $HOME/.local/bin/start-wayfire"
     fi
 
     # === GNOME Desktop Installation ===
@@ -505,26 +998,235 @@ main() {
     # === Wayfire Installation ===
     header "Installing Wayfire and dependencies"
     
-    # Install core packages
-    run "sudo pacman -S --needed --noconfirm wayland wlroots xorg-xwayland kitty"
+    # Install core packages with optimization flags
+    local WAYLAND_PACKAGES=(
+        "wayland"
+        "wlroots"
+        "xorg-xwayland"
+        "kitty"
+        "swaybg"
+        "swaylock"
+        "swayidle"
+        "dunst"
+        "mako"
+        "grim"
+        "slurp"
+        "swaywm-waybar"
+    )
+    
+    local OPTIMIZATION_FLAGS="--noconfirm --needed --asdeps"
+    
+    for pkg in "${WAYLAND_PACKAGES[@]}"; do
+        if ! retry "sudo pacman $OPTIMIZATION_FLAGS $pkg"; then
+            error "Failed to install package: $pkg"
+            exit 1
+        fi
+    done
 
-    # Build Wayfire components
-    build_git_pkg "https://github.com/WayfireWM/wayfire.git" "wayfire"
-    build_git_pkg "https://github.com/WayfireWM/wf-shell.git" "wf-shell"
-    build_git_pkg "https://github.com/WayfireWM/wcm.git" "wcm"
-    build_git_pkg "https://github.com/soreau/pixdecor.git" "pixdecor"
+    # Build Wayfire components with error handling
+    local WAYFIRE_COMPONENTS=(
+        "https://github.com/WayfireWM/wayfire.git wayfire"
+        "https://github.com/WayfireWM/wf-shell.git wf-shell"
+        "https://github.com/WayfireWM/wcm.git wcm"
+        "https://github.com/soreau/pixdecor.git pixdecor"
+    )
+    
+    for component in "${WAYFIRE_COMPONENTS[@]}"; do
+        local repo=$(echo "$component" | cut -d' ' -f1)
+        local pkg=$(echo "$component" | cut -d' ' -f2)
+        
+        if ! build_git_pkg "$repo" "$pkg"; then
+            error "Failed to build $pkg"
+            exit 1
+        fi
+    done
+    
+    # Verify Wayfire installation
+    if ! command -v wayfire >/dev/null 2>&1; then
+        error "Wayfire installation failed. Please check the logs."
+        exit 1
+    fi
+    
+    # Verify Wayfire version and configure
+    local wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    if [ -z "$wayfire_version" ]; then
+        error "Wayfire version verification failed"
+        exit 1
+    fi
+    
+    log "Wayfire version $wayfire_version installed successfully"
+    
+    # Configure Wayfire settings
+    header "Configuring Wayfire settings"
+    
+    # Create Wayfire config directory
+    local WAYFIRE_CONFIG_DIR="$HOME/.config/wayfire"
+    if [ ! -d "$WAYFIRE_CONFIG_DIR" ]; then
+        run "mkdir -p $WAYFIRE_CONFIG_DIR"
+    fi
+    
+    # Create basic Wayfire config
+    cat > "$WAYFIRE_CONFIG_DIR/wayfire.ini" << EOF
+[core]
+backend = auto
+vsync = true
+
+[output]
+use-randr = true
+auto-arrange = true
+
+[workspaces]
+num-workspaces = 10
+
+[focus]
+focus-follows-pointer = true
+
+[plugins]
+plugins =
+    workspaces
+    move
+    resize
+    fullscreen
+    close
+    minimize
+    maximize
+    tile
+    scale
+    effects
+    screenshot
+    keyboard
+    pointer
+    xwayland
+    xwayland-clipboard
+    xwayland-cursor
+    xwayland-input
+    xwayland-output
+    xwayland-viewport
+    xwayland-xwayland
+    xwayland-xwayland-clipboard
+    xwayland-xwayland-cursor
+    xwayland-xwayland-input
+    xwayland-xwayland-output
+    xwayland-xwayland-viewport
+    xwayland-xwayland-xwayland
+
+[autostart]
+launcher = $HOME/.config/wayfire/scripts/inactive-alpha.py
+EOF
+    
+    # Create Wayfire scripts directory
+    local WAYFIRE_SCRIPTS_DIR="$HOME/.config/wayfire/scripts"
+    if [ ! -d "$WAYFIRE_SCRIPTS_DIR" ]; then
+        run "mkdir -p $WAYFIRE_SCRIPTS_DIR"
+    fi
+    
+    # Create inactive alpha script
+    cat > "$WAYFIRE_SCRIPTS_DIR/inactive-alpha.py" << EOF
+#!/usr/bin/env python3
+
+import wayfire
+
+def on_window_focus(window, state):
+    if state:
+        window.set_alpha(1.0)
+    else:
+        window.set_alpha(0.8)
+
+wayfire.subscribe('window_focus', on_window_focus)
+EOF
+    
+    run "chmod +x $WAYFIRE_SCRIPTS_DIR/inactive-alpha.py"
 
     # === Theme and Icons ===
     header "Installing theme and icons"
     
-    # Install GTK theme
-    if [ ! -d "$SCRIPT_DIR/Tokyo-Night-GTK-Theme" ]; then
-        run "git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git"
+    # Install GTK theme with backup and verification
+    local THEME_DIR="$HOME/.local/share/themes"
+    local THEME_NAME="TokyoNight-Dark"
+    
+    # Backup existing theme
+    if [ -d "$THEME_DIR/$THEME_NAME" ]; then
+        backup_config "$THEME_DIR/$THEME_NAME" "$BACKUP_DIR/themes/"
     fi
-    cd "$SCRIPT_DIR/Tokyo-Night-GTK-Theme/themes" || exit 1
-    run "./install.sh -d \"$HOME/.local/share/themes\" -c dark -l --tweaks black"
-    cd "$SCRIPT_DIR" || exit 1
-    run "rm -rf \"$SCRIPT_DIR/Tokyo-Night-GTK-Theme\""
+    
+    # Install icons with verification
+    local ICONS_DIR="$HOME/.local/share/icons"
+    local ICON_THEME="Aretha-Dark"
+    
+    # Backup existing icons
+    if [ -d "$ICONS_DIR/$ICON_THEME" ]; then
+        backup_config "$ICONS_DIR/$ICON_THEME" "$BACKUP_DIR/icons/"
+    fi
+    
+    # Install icons
+    if [ ! -d "$SCRIPT_DIR/Aretha-Dark-Icons" ]; then
+        if ! retry "git clone https://github.com/EliverLara/Aretha.git"; then
+            error "Failed to clone icons repository"
+            exit 1
+        fi
+        run "mv Aretha Aretha-Dark-Icons"
+        run "rm -rf Aretha"
+    fi
+    
+    if ! cd "$SCRIPT_DIR/Aretha-Dark-Icons"; then
+        error "Failed to access icons directory"
+        exit 1
+    fi
+    
+    if ! retry "./install.sh -d \"$ICONS_DIR\" -c dark"; then
+        error "Failed to install icons"
+        exit 1
+    fi
+    
+    if ! cd "$SCRIPT_DIR"; then
+        error "Failed to return to script directory"
+        exit 1
+    fi
+    
+    # Verify icons installation
+    if [ ! -d "$ICONS_DIR/$ICON_THEME" ]; then
+        error "Icons installation failed"
+        exit 1
+    fi
+    
+    # Clean up
+    if ! retry "rm -rf \"$SCRIPT_DIR/Aretha-Dark-Icons\""; then
+        warn "Failed to clean up icons installation files"
+    fi
+    
+    # Install theme
+    if [ ! -d "$SCRIPT_DIR/Tokyo-Night-GTK-Theme" ]; then
+        if ! retry "git clone https://github.com/Fausto-Korpsvart/Tokyo-Night-GTK-Theme.git"; then
+            error "Failed to clone theme repository"
+            exit 1
+        fi
+    fi
+    
+    if ! cd "$SCRIPT_DIR/Tokyo-Night-GTK-Theme/themes"; then
+        error "Failed to access theme directory"
+        exit 1
+    fi
+    
+    if ! retry "./install.sh -d \"$THEME_DIR\" -c dark -l --tweaks black"; then
+        error "Failed to install theme"
+        exit 1
+    fi
+    
+    if ! cd "$SCRIPT_DIR"; then
+        error "Failed to return to script directory"
+        exit 1
+    fi
+    
+    # Verify theme installation
+    if [ ! -d "$THEME_DIR/$THEME_NAME" ]; then
+        error "Theme installation failed"
+        exit 1
+    fi
+    
+    # Clean up
+    if ! retry "rm -rf \"$SCRIPT_DIR/Tokyo-Night-GTK-Theme\""; then
+        warn "Failed to clean up theme installation files"
+    fi
 
     # Install icons
     if [ ! -d "$SCRIPT_DIR/Aretha-Dark-Icons" ]; then
