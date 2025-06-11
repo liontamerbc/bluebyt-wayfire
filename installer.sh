@@ -16,6 +16,7 @@
 # - For Arch Linux and derivatives ONLY
 ################################################################################
 
+# === Script Setup ===
 set -euo pipefail
 
 # === Constants ===
@@ -47,37 +48,8 @@ SKIP_WALLPAPERS=false
 INSTALL_GNOME=false
 BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 
-# === Trap handlers ===
-trap cleanup EXIT SIGINT SIGTERM
-
-# === Helper Functions ===
-require_bin() {
-    local bin="$1"
-    if ! command -v "$bin" >/dev/null 2>&1; then
-        error "$bin is not installed"
-        return 1
-    fi
-    return 0
-}
-
-# === Main function ===
-main() {
-    # Check for required binaries first
-    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "sha256sum"; then
-        error "Required dependencies are missing. Please install them first."
-        exit 1
-    fi
-
-    # Now define all other functions
-    # (all other function definitions go here)
-}
-
-# === Script entry point ===
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-    main "$@"
-fi
-
-# === Logging Functions ===
+# === Core Functions ===
+# === Logging ===
 log() {
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
     echo -e "${GREEN}[$timestamp] [INFO]${NC} $*" | tee -a "$LOG_FILE"
@@ -103,106 +75,6 @@ fatal() {
 progress() {
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
     echo -ne "${BLUE}[$timestamp] [PROGRESS]${NC} $*\r" | tee -a "$LOG_FILE"
-}
-
-# === Utility Functions ===
-build_git_pkg() {
-    local repo="$1"
-    local pkg="$2"
-    local build_dir="$SCRIPT_DIR/build_$pkg"
-    
-    # Check required dependencies
-    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "meson" || ! require_bin "ninja"; then
-        error "Required build tools are missing"
-        return 1
-    fi
-    
-    if [ -d "$build_dir" ]; then
-        run "rm -rf \"$build_dir\""
-    fi
-    
-    run "git clone $repo $build_dir"
-    cd "$build_dir" || exit 1
-    
-    if [ -f "PKGBUILD" ]; then
-        run "makepkg -si --noconfirm"
-    else
-        run "meson build"
-        run "ninja -C build"
-        run "sudo ninja -C build install"
-    fi
-    
-    cd "$SCRIPT_DIR" || exit 1
-    run "rm -rf \"$build_dir\""
-}
-
-retry() {
-    local cmd="$1"
-    local retries=${2:-$MAX_RETRIES}
-    local delay=5
-    
-    for ((i=1; i<=retries; i++)); do
-        if eval "$cmd"; then
-            return 0
-        fi
-        warn "Attempt $i/$retries failed. Retrying in $delay seconds..."
-        sleep $delay
-        ((delay+=5))
-    done
-    return 1
-}
-
-timeout() {
-    local timeout=$1
-    shift
-    local cmd="$*"
-    
-    if ! timeout --preserve-status $timeout "$cmd"; then
-        error "Command timed out after $timeout seconds: $cmd"
-        return 1
-    fi
-    return 0
-}
-
-validate_checksum() {
-    local file="$1"
-    local expected_checksum="$2"
-    
-    if ! command -v sha256sum >/dev/null 2>&1; then
-        error "sha256sum not found. Cannot verify checksum."
-        return 1
-    fi
-    
-    local actual_checksum
-    actual_checksum=$(sha256sum "$file" | awk '{print $1}')
-    
-    if [ "$actual_checksum" != "$expected_checksum" ]; then
-        error "Checksum verification failed for $file"
-        return 1
-    fi
-    return 0
-}
-
-# === Configuration Management ===
-backup_config() {
-    local src="$1"
-    local dest="$2"
-    
-    if [ -d "$src" ]; then
-        run "cp -r \"$src\" \"$dest\""
-        CONFIG_BACKUPS["$src"]="$dest"
-        log "Backed up $src to $dest"
-    fi
-}
-
-restore_config() {
-    for src in "${!CONFIG_BACKUPS[@]}"; do
-        local dest="${CONFIG_BACKUPS[$src]}"
-        if [ -d "$dest" ]; then
-            run "cp -r \"$dest\" \"$src\""
-            log "Restored $src from backup"
-        fi
-    done
 }
 
 # === Command Execution ===
@@ -258,21 +130,111 @@ confirm() {
     done
 }
 
+# === Utility ===
+retry() {
+    local cmd="$1"
+    local retries=${2:-$MAX_RETRIES}
+    local delay=5
+    
+    for ((i=1; i<=retries; i++)); do
+        if eval "$cmd"; then
+            return 0
+        fi
+        warn "Attempt $i/$retries failed. Retrying in $delay seconds..."
+        sleep $delay
+        ((delay+=5))
+    done
+    return 1
+}
+
+timeout() {
+    local timeout=$1
+    shift
+    local cmd="$*"
+    
+    if ! timeout --preserve-status $timeout "$cmd"; then
+        error "Command timed out after $timeout seconds: $cmd"
+        return 1
+    fi
+    return 0
+}
+
+validate_checksum() {
+    local file="$1"
+    local expected_checksum="$2"
+    
+    if ! command -v sha256sum >/dev/null 2>&1; then
+        error "sha256sum not found. Cannot verify checksum."
+        return 1
+    fi
+    
+    local actual_checksum
+    actual_checksum=$(sha256sum "$file" | awk '{print $1}')
+    
+    if [ "$actual_checksum" != "$expected_checksum" ]; then
+        error "Checksum verification failed for $file"
+        return 1
+    fi
+    return 0
+}
+
 # === Package Management ===
 require_bin() {
-    local cmd="$1"
-    local ver="$2"
-    local retries=${3:-$MAX_RETRIES}
+    local bin="$1"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+        error "$bin is not installed"
+        return 1
+    fi
+    return 0
+}
+
+# === Configuration Management ===
+backup_config() {
+    local src="$1"
+    local dest="$2"
     
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-        fatal "$cmd is required but not installed. Attempting to install now..."
-        if [ "$AUTO_YES" = true ]; then
-            run "sudo pacman -S --noconfirm $cmd"
-        else
-            if confirm "The required package '$cmd' is not installed. Would you like to install it now?"; then
-                run "sudo pacman -S --noconfirm $cmd"
-            else
-                fatal "Cannot continue without $cmd. Please install it manually and try again."
+    if [ -d "$src" ]; then
+        run "cp -r \"$src\" \"$dest\""
+        CONFIG_BACKUPS["$src"]="$dest"
+        log "Backed up $src to $dest"
+    fi
+}
+
+restore_config() {
+    for src in "${!CONFIG_BACKUPS[@]}"; do
+        local dest="${CONFIG_BACKUPS[$src]}"
+        if [ -d "$dest" ]; then
+            run "cp -r \"$dest\" \"$src\""
+            log "Restored $src from backup"
+        fi
+    done
+}
+
+# === Build Functions ===
+build_git_pkg() {
+    local repo="$1"
+    local pkg="$2"
+    local build_dir="$SCRIPT_DIR/build_$pkg"
+    
+    # Check required dependencies
+    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "meson" || ! require_bin "ninja"; then
+        error "Required build tools are missing"
+        return 1
+    fi
+    
+    if [ -d "$build_dir" ]; then
+        run "rm -rf \"$build_dir\""
+    fi
+    
+    run "git clone $repo $build_dir"
+    cd "$build_dir" || exit 1
+    
+    if [ -f "PKGBUILD" ]; then
+        run "makepkg -si --noconfirm"
+    else
+        run "meson build"
+        run "ninja -C build"
+        run "sudo ninja -C build install"
             fi
         fi
         
