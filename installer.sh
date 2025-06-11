@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+cd #!/usr/bin/env bash
 
 ################################################################################
 # bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
