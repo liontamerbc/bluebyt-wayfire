@@ -1520,7 +1520,7 @@ EOF
     # === Verification ===
     header "Verifying installations"
     
-    local failed=false
+    failed=false
     for cmd in wayfire kitty fish zed wcm xava wlogout; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             warn "$cmd not found!"
