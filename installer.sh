@@ -54,9 +54,31 @@ if [ -r /proc/sys/kernel/random/entropy_avail ]; then
         echo -e "${YELLOW}Warning: Low system entropy (${entropy}) detected${NC}"
         echo -e "${YELLOW}This might cause package signature verification to hang${NC}"
         if ! command -v haveged &>/dev/null; then
-            echo -e "${RED}Error: haveged is not installed to improve entropy${NC}"
-            echo -e "${YELLOW}Please install haveged or ensure sufficient entropy${NC}"
-            exit 1
+            echo -e "${BLUE}Installing haveged to improve entropy...${NC}"
+            if ! pacman -S --noconfirm haveged &>/dev/null; then
+                echo -e "${RED}Error: Failed to install haveged${NC}"
+                echo -e "${YELLOW}Please install haveged manually or ensure sufficient entropy${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}Starting haveged service...${NC}"
+            if ! systemctl start haveged &>/dev/null; then
+                echo -e "${RED}Error: Failed to start haveged service${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}Enabling haveged service...${NC}"
+            if ! systemctl enable haveged &>/dev/null; then
+                echo -e "${RED}Error: Failed to enable haveged service${NC}"
+                exit 1
+            fi
+            echo -e "${GREEN}haveged installed and started successfully${NC}"
+        fi
+        # Wait a moment for haveged to generate entropy
+        sleep 2
+        # Recheck entropy after haveged installation
+        entropy=$(cat /proc/sys/kernel/random/entropy_avail)
+        if [ "$entropy" -lt 1000 ]; then
+            echo -e "${YELLOW}Warning: Entropy still low after haveged installation (${entropy})${NC}"
+            echo -e "${YELLOW}Continuing installation with existing entropy${NC}"
         fi
     fi
 fi
@@ -66,8 +88,22 @@ if command -v timedatectl &>/dev/null; then
     if ! timedatectl status | grep -q "system clock synchronized: yes"; then
         echo -e "${RED}Error: System time is not synchronized${NC}"
         echo -e "${YELLOW}This can cause package signature verification failures${NC}"
-        echo -e "${YELLOW}Please run 'timedatectl set-ntp true' to fix${NC}"
-        exit 1
+        echo -e "${BLUE}Attempting to enable NTP synchronization...${NC}"
+        if ! timedatectl set-ntp true &>/dev/null; then
+            echo -e "${RED}Error: Failed to enable NTP synchronization${NC}"
+            echo -e "${YELLOW}Please enable NTP synchronization manually${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}NTP synchronization enabled${NC}"
+        # Wait a moment for NTP to sync
+        sleep 5
+        # Recheck time synchronization
+        if ! timedatectl status | grep -q "system clock synchronized: yes"; then
+            echo -e "${RED}Error: Failed to synchronize system time even after enabling NTP${NC}"
+            echo -e "${YELLOW}Please verify NTP synchronization manually${NC}"
+            exit 1
+        fi
+        echo -e "${GREEN}System time synchronized successfully${NC}"
     fi
 fi
 
