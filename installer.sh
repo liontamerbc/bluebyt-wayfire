@@ -19,6 +19,13 @@
 # === Script Setup ===
 set -euo pipefail
 
+# === Colors ===
+readonly RED='\033[0;31m'
+readonly GREEN='\033[1;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[1;34m'
+readonly NC='\033[0m'
+
 # === Critical Safety Checks ===
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
@@ -42,7 +49,7 @@ fi
 
 # Check system entropy
 if [ -r /proc/sys/kernel/random/entropy_avail ]; then
-    local entropy=$(cat /proc/sys/kernel/random/entropy_avail)
+    entropy=$(cat /proc/sys/kernel/random/entropy_avail)
     if [ "$entropy" -lt 1000 ]; then
         echo -e "${YELLOW}Warning: Low system entropy (${entropy}) detected${NC}"
         echo -e "${YELLOW}This might cause package signature verification to hang${NC}"
@@ -80,7 +87,7 @@ if command -v aa-status &>/dev/null; then
 fi
 
 # Check system load
-local load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
+load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
 if (( $(echo "$load > 4" | bc -l) )); then
     echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
     echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
@@ -131,7 +138,7 @@ DISK_CHECKS=(
 
 for mount in "${DISK_CHECKS[@]}"; do
     if mountpoint -q "$mount"; then
-        local free_space=$(df -m "$mount" | awk 'NR==2 {print $4}')
+        free_space=$(df -m "$mount" | awk 'NR==2 {print $4}')
         if [ "$free_space" -lt 1000 ]; then  # 1GB minimum
             echo -e "${RED}Error: Insufficient disk space on $mount${NC}"
             echo -e "${YELLOW}Free space: $free_space MB${NC}"
