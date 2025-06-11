@@ -88,7 +88,9 @@ run() {
     progress "Executing: $cmd"
     
     if ! timeout $TIMEOUT_SECONDS "$cmd"; then
-        error "Command failed: $cmd"
+        local error_msg="Command failed: $cmd"
+        error "$error_msg"
+        echo "$error_msg" >> "$LOG_FILE"
         return 1
     fi
     
@@ -244,20 +246,6 @@ build_git_pkg() {
     local ver="$4"
     local build_dir="$SCRIPT_DIR/build_$pkg"
     
-    # Check required dependencies
-    local REQUIRED_TOOLS="git makepkg meson ninja"
-    local missing_tools=""
-    for tool in $REQUIRED_TOOLS; do
-        if ! require_bin "$tool"; then
-            missing_tools="$missing_tools $tool"
-        fi
-    done
-    
-    if [ -n "$missing_tools" ]; then
-        error "Required build tools are missing: $missing_tools"
-        return 1
-    fi
-    
     # Check if package is already installed and meets requirements
     if [ -n "$cmd" ]; then
         if command -v "$cmd" >/dev/null 2>&1; then
@@ -329,16 +317,28 @@ cleanup() {
     if [ "$FAILED" = "true" ]; then
         warn "Installation failed. Performing cleanup..."
         
-        # Remove temporary directories
-        cd "$SCRIPT_DIR" || exit 1
-        for dir in wayfire wf-shell wcm pixdecor Tokyo-Night-GTK-Theme Aretha-Dark-Icons; do
+        # Remove temporary directories safely
+        local cleanup_dirs=(
+            "$SCRIPT_DIR/build_*"
+            "$SCRIPT_DIR/wayfire"
+            "$SCRIPT_DIR/wf-shell"
+            "$SCRIPT_DIR/wcm"
+            "$SCRIPT_DIR/pixdecor"
+            "$SCRIPT_DIR/Tokyo-Night-GTK-Theme"
+            "$SCRIPT_DIR/Aretha-Dark-Icons"
+        )
+        
+        for dir in "${cleanup_dirs[@]}"; do
             if [ -d "$dir" ]; then
+                log "Removing temporary directory: $dir"
                 run "rm -rf \"$dir\""
             fi
         done
         
-        # Restore configurations
-        restore_config
+        # Restore configurations if they exist
+        if [ -n "${CONFIG_BACKUPS[*]}" ]; then
+            restore_config
+        fi
         
         warn "Cleanup complete. See $LOG_FILE for details."
         echo "See $LOG_FILE for detailed installation log"
@@ -424,6 +424,70 @@ main() {
 
     # === Pre-flight Checks ===
     header "Pre-flight system checks"
+    log "Selected theme: $THEME"
+    log "Full installation: $INSTALL_ALL"
+    log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
+    log "Dry-run: $DRY_RUN"
+    log "Install GNOME first: $INSTALL_GNOME"
+    log "Non-interactive mode: $AUTO_YES"
+    log "Installer version: $SCRIPT_VERSION"
+
+    if ! confirm "Do you want to proceed with the installation?"; then
+        fatal "Aborted by user."
+    fi
+
+    # === System Requirements ===
+    header "Verifying system requirements"
+    
+    # Check disk space
+    local required_space=10000  # 10GB minimum required for full installation
+    local available_space=$(df -m / | awk 'NR==2 {print $4}')
+    
+    if [ "$available_space" -lt "$required_space" ]; then
+        error "Insufficient disk space. Required: $required_space MB, Available: $available_space MB"
+        exit 1
+    fi
+    
+    # Check memory
+    local mem=$(free -m | awk '/Mem:/ {print $2}')
+    if [ "$mem" -lt 2048 ]; then
+        warn "Low memory detected ($mem MB). Installation may be slow."
+    fi
+
+    # Check CPU cores
+    local cores=$(nproc)
+    if [ "$cores" -lt 4 ]; then
+        warn "Low CPU cores detected ($cores cores). Installation may be slow."
+    fi
+
+    # === Package Installation ===
+    header "Installing required packages"
+    
+    # Consolidated list of all required packages
+    local ALL_PACKAGES="wayfire kitty fish zed wlogout xava wcm git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl pciutils meson"
+    
+    if [ "$INSTALL_ALL" = false ]; then
+        ALL_PACKAGES="wayfire kitty fish zed wlogout xava wcm git gcc base-devel curl pciutils meson"
+    fi
+    
+    # Install packages with retry mechanism and error handling
+    local install_cmd="sudo pacman -S --needed --noconfirm $ALL_PACKAGES"
+    
+    if ! retry "$install_cmd"; then
+        error "Failed to install required packages after multiple attempts."
+        exit 1
+    fi
+    
+    # Verify package installation
+    for pkg in $ALL_PACKAGES; do
+        if ! command -v $pkg >/dev/null 2>&1; then
+            error "Failed to install required package: $pkg"
+            exit 1
+        fi
+    done
+    
+    # Log successful installation
+    log "All required packages installed successfully"
     log "Selected theme: $THEME"
     log "Full installation: $INSTALL_ALL"
     log "Install wallpapers: $([ "$SKIP_WALLPAPERS" = "true" ] && echo "no" || echo "yes")"
