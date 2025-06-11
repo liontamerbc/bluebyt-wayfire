@@ -1499,22 +1499,12 @@ EOF
     fi
 }
 
-[autostart]
-launcher = $IPC_DIR/inactive-alpha.py
-EOF
-    fi
-
-# === Wayfire Session ===
+    # === Wayfire Session ===
     header "Creating Wayfire session"
-    
     if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
         # Create directory if it doesn't exist
         if [ ! -d /usr/share/wayland-sessions ]; then
             run "sudo mkdir -p /usr/share/wayland-sessions"
-            if [ $? -ne 0 ]; then
-                error "Failed to create wayland-sessions directory"
-                exit 1
-            fi
         fi
         
         # Write Wayfire session file
@@ -1525,12 +1515,7 @@ Comment=A lightweight and customizable Wayland compositor
 Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
 Type=Application
 EOF
-        if [ $? -ne 0 ]; then
-            error "Failed to create wayfire.desktop file"
-            exit 1
-        fi
     fi
-
 
     # === Verification ===
     header "Verifying installations"
@@ -1548,7 +1533,7 @@ EOF
     fi
 
     # === Final Summary ===
-    echoalso
+    echo
     if [ "$FAILED" = "true" ]; then
         echo -e "${RED}Installation completed with errors.${NC}"
         echo "Please review $LOG_FILE for more information."
@@ -1557,3 +1542,7 @@ EOF
         echo -e "${GREEN}Installation completed successfully!${NC}"
         echo "See $LOG_FILE for a detailed log."
         echo "To start Wayfire:" && echo "    1. Log out of your current session" && echo "    2. Select 'Wayfire' from your display manager's session list" && echo "    3. Log back in to start Wayfire"
+        exit 0
+    fi
+
+main "$@"
