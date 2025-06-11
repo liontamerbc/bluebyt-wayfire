@@ -102,33 +102,120 @@ check_ntp() {
         systemctl enable chronyd
     fi
 
+    # Configure chrony with multiple regional NTP servers
+    local chrony_config="/etc/chrony/chrony.conf"
+    local backup_config="${chrony_config}.backup"
+    
+    # Backup existing config
+    if [ -f "$chrony_config" ]; then
+        cp -f "$chrony_config" "$backup_config"
+    fi
+
+    # Get system timezone to determine region
+    local timezone=$(timedatectl status | grep "Time zone:" | awk '{print $3}' | cut -d'/' -f1)
+    
+    # Select appropriate NTP servers based on region
+    local ntp_servers=""
+    case "$timezone" in
+        "Europe")
+            ntp_servers="0.europe.pool.ntp.org 1.europe.pool.ntp.org 2.europe.pool.ntp.org 3.europe.pool.ntp.org"
+            ;;
+        "America")
+            ntp_servers="0.north-america.pool.ntp.org 1.north-america.pool.ntp.org 2.north-america.pool.ntp.org 3.north-america.pool.ntp.org"
+            ;;
+        "Asia")
+            ntp_servers="0.asia.pool.ntp.org 1.asia.pool.ntp.org 2.asia.pool.ntp.org 3.asia.pool.ntp.org"
+            ;;
+        "Africa")
+            ntp_servers="0.africa.pool.ntp.org 1.africa.pool.ntp.org 2.africa.pool.ntp.org 3.africa.pool.ntp.org"
+            ;;
+        "Australia")
+            ntp_servers="0.oceania.pool.ntp.org 1.oceania.pool.ntp.org 2.oceania.pool.ntp.org 3.oceania.pool.ntp.org"
+            ;;
+        *)
+            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
+            ;;
+    esac
+
+    # Configure chrony with selected servers
+    echo "# Global NTP servers configuration" > "$chrony_config"
+    echo "pool $ntp_servers iburst" >> "$chrony_config"
+    echo "keyfile /etc/chrony/chrony.keys" >> "$chrony_config"
+    echo "driftfile /var/lib/chrony/drift" >> "$chrony_config"
+    echo "rtcsync" >> "$chrony_config"
+    echo "makestep 1.0 3" >> "$chrony_config"
+    echo "logdir /var/log/chrony" >> "$chrony_config"
+    
     # Start chronyd if not running
     if ! systemctl is-active --quiet chronyd; then
         echo -e "${BLUE}Starting chronyd...${NC}"
         systemctl start chronyd
     fi
 
-    # Wait for NTP to synchronize
+    # Wait for NTP to synchronize with exponential backoff
     local attempts=0
     local max_attempts=10
     local wait_time=5
+    local backoff_factor=1.5
     
     while [ $attempts -lt $max_attempts ]; do
-        if chronyc sources | grep -q "^\*"; then
-            echo -e "${GREEN}NTP synchronized successfully${NC}"
+        if chronyc sources | grep -q "^\\*"; then
+            echo -e "${GREEN}NTP synchronized successfully with ${ntp_servers}${NC}"
             return 0
         fi
         
         echo -e "${YELLOW}NTP not synchronized yet, waiting... (${attempts}/${max_attempts})${NC}"
+        echo -e "${BLUE}Trying NTP servers: ${ntp_servers}${NC}"
+        
+        # Check if any servers are responding
+        local responding=false
+        for server in $ntp_servers; do
+            if ping -c 1 -W 2 "$server" &>/dev/null; then
+                responding=true
+                break
+            fi
+        done
+        
+        if ! $responding; then
+            echo -e "${YELLOW}Warning: None of the NTP servers are responding. Switching to fallback servers...${NC}"
+            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
+            # Update chrony config with fallback servers
+            echo "pool $ntp_servers iburst" > "$chrony_config"
+            systemctl restart chronyd
+        fi
+        
         sleep $wait_time
+        wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
         attempts=$((attempts + 1))
     done
 
-    echo -e "${RED}Error: Failed to synchronize NTP after ${max_attempts} attempts${NC}"
+    # If all attempts fail, try one final sync with ntpdate as fallback
+    echo -e "${YELLOW}Attempting final sync with ntpdate as fallback...${NC}"
+    if ! command -v ntpdate &>/dev/null; then
+        pacman -S --noconfirm ntp
+    fi
+    
+    if ntpdate -u pool.ntp.org &>/dev/null; then
+        echo -e "${GREEN}Successfully synchronized using ntpdate${NC}"
+        return 0
+    fi
+
+    echo -e "${RED}Error: Failed to synchronize NTP after all attempts${NC}"
     echo -e "${YELLOW}Please verify NTP synchronization manually with these commands:${NC}"
     echo -e "${GREEN}sudo chronyc sources${NC}"
     echo -e "${GREEN}sudo chronyc tracking${NC}"
     echo -e "${GREEN}sudo chronyc sourcestats${NC}"
+    echo -e "${YELLOW}If problems persist, try these manual steps:${NC}"
+    echo -e "${GREEN}1. Check your network connection${NC}"
+    echo -e "${GREEN}2. Verify firewall settings${NC}"
+    echo -e "${GREEN}3. Check if any NTP servers are reachable:${NC}"
+    echo -e "${GREEN}ping -c 1 pool.ntp.org${NC}"
+    
+    # Restore original config if we had a backup
+    if [ -f "$backup_config" ]; then
+        cp -f "$backup_config" "$chrony_config"
+        rm -f "$backup_config"
+    fi
     
     return 1
 }
