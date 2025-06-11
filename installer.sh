@@ -1498,7 +1498,6 @@ EOF
         exit 0
     fi
 }
-plugins = ipc ipc-rules follow-focus
 
 [autostart]
 launcher = $IPC_DIR/inactive-alpha.py
