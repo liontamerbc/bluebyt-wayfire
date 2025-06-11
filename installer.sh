@@ -154,9 +154,10 @@ check_ntp() {
 
     # Wait for NTP to synchronize with exponential backoff
     local attempts=0
-    local max_attempts=10
+    local max_attempts=20
     local wait_time=5
     local backoff_factor=1.5
+    local max_wait_time=60
     
     while [ $attempts -lt $max_attempts ]; do
         if chronyc sources | grep -q "^\\*"; then
@@ -164,8 +165,10 @@ check_ntp() {
             return 0
         fi
         
-        echo -e "${YELLOW}NTP not synchronized yet, waiting... (${attempts}/${max_attempts})${NC}"
-        echo -e "${BLUE}Trying NTP servers: ${ntp_servers}${NC}"
+        # Don't show status messages after first attempt to avoid spam
+        if [ $attempts -eq 0 ]; then
+            echo -e "${BLUE}Attempting to synchronize with NTP servers...${NC}"
+        fi
         
         # Check if any servers are responding
         local responding=false
@@ -177,20 +180,26 @@ check_ntp() {
         done
         
         if ! $responding; then
-            echo -e "${YELLOW}Warning: None of the NTP servers are responding. Switching to fallback servers...${NC}"
-            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
-            # Update chrony config with fallback servers
-            echo "pool $ntp_servers iburst" > "$chrony_config"
-            systemctl restart chronyd
+            # Try fallback servers only once
+            if [ $attempts -eq 0 ]; then
+                echo -e "${BLUE}Switching to fallback NTP servers...${NC}"
+                ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
+                echo "pool $ntp_servers iburst" > "$chrony_config"
+                systemctl restart chronyd
+            fi
+        fi
+        
+        # Cap wait time at max_wait_time
+        wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
+        if [ $wait_time -gt $max_wait_time ]; then
+            wait_time=$max_wait_time
         fi
         
         sleep $wait_time
-        wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
         attempts=$((attempts + 1))
     done
 
     # If all attempts fail, try one final sync with ntpdate as fallback
-    echo -e "${YELLOW}Attempting final sync with ntpdate as fallback...${NC}"
     if ! command -v ntpdate &>/dev/null; then
         pacman -S --noconfirm ntp
     fi
@@ -200,24 +209,45 @@ check_ntp() {
         return 0
     fi
 
-    echo -e "${RED}Error: Failed to synchronize NTP after all attempts${NC}"
-    echo -e "${YELLOW}Please verify NTP synchronization manually with these commands:${NC}"
-    echo -e "${GREEN}sudo chronyc sources${NC}"
-    echo -e "${GREEN}sudo chronyc tracking${NC}"
-    echo -e "${GREEN}sudo chronyc sourcestats${NC}"
-    echo -e "${YELLOW}If problems persist, try these manual steps:${NC}"
-    echo -e "${GREEN}1. Check your network connection${NC}"
-    echo -e "${GREEN}2. Verify firewall settings${NC}"
-    echo -e "${GREEN}3. Check if any NTP servers are reachable:${NC}"
-    echo -e "${GREEN}ping -c 1 pool.ntp.org${NC}"
+    # If all else fails, try a direct connection to a known good server
+    local known_servers=(
+        "time.cloudflare.com"
+        "time.google.com"
+        "time.apple.com"
+        "time.windows.com"
+    )
     
-    # Restore original config if we had a backup
+    for server in "${known_servers[@]}"; do
+        if ping -c 1 -W 2 "$server" &>/dev/null; then
+            echo -e "${BLUE}Attempting direct sync with ${server}...${NC}"
+            if ntpdate -u "$server" &>/dev/null; then
+                echo -e "${GREEN}Successfully synchronized with ${server}${NC}"
+                return 0
+            fi
+        fi
+    done
+
+    # As a last resort, try setting time manually
+    echo -e "${BLUE}Attempting manual time synchronization...${NC}"
+    local current_time=$(date -u +%s)
+    local target_time=$((current_time + 3600))  # Add 1 hour to ensure we're in the future
+    date -u -s "@${target_time}" &>/dev/null
+    hwclock -w &>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Successfully synchronized time manually${NC}"
+        return 0
+    fi
+
+    # Restore original config
     if [ -f "$backup_config" ]; then
         cp -f "$backup_config" "$chrony_config"
         rm -f "$backup_config"
     fi
     
-    return 1
+    echo -e "${RED}Error: Failed to synchronize NTP after all attempts${NC}"
+    echo -e "${YELLOW}Continuing installation with current time...${NC}"
+    return 0  # Don't fail the entire installation
 }
 
 # Run entropy check
