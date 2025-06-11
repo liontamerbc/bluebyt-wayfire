@@ -47,18 +47,108 @@ if [ "$ARCH" != "x86_64" ]; then
     exit 1
 fi
 
+# Function to check and improve system entropy
+check_entropy() {
+    local entropy
+    entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
+    
+    if [ "$entropy" -lt 1000 ]; then
+        echo -e "${YELLOW}Low system entropy detected (${entropy}/4096)${NC}"
+        echo -e "${BLUE}Attempting to improve entropy...${NC}"
+        
+        # Install haveged if not present
+        if ! command -v haveged &>/dev/null; then
+            echo -e "${BLUE}Installing haveged...${NC}"
+            pacman -S --noconfirm haveged
+            systemctl start haveged
+            systemctl enable haveged
+        fi
+        
+        # Start rngd if not running
+        if ! systemctl is-active --quiet rngd; then
+            echo -e "${BLUE}Starting rngd...${NC}"
+            systemctl start rngd
+        fi
+        
+        # Generate some entropy manually
+        echo -e "${BLUE}Generating additional entropy...${NC}"
+        for i in {1..10}; do
+            dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none
+        done
+        
+        # Check entropy again
+        entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
+        echo -e "${BLUE}Current entropy: ${entropy}/4096${NC}"
+        
+        if [ "$entropy" -lt 500 ]; then
+            echo -e "${YELLOW}Warning: Entropy is still low (${entropy}/4096)${NC}"
+            echo -e "${YELLOW}You may want to run these commands in another terminal to generate more entropy:"
+            echo -e "${GREEN}while true; do dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none; done${NC}"
+            echo -e "${YELLOW}Press Ctrl+C when entropy is above 500${NC}"
+        fi
+    else
+        echo -e "${GREEN}System entropy is good (${entropy}/4096)${NC}"
+    fi
+}
+
+# Function to check and fix NTP synchronization
+check_ntp() {
+    echo -e "${BLUE}Checking NTP synchronization...${NC}"
+    
+    # Install chrony if not present
+    if ! command -v chronyc &>/dev/null; then
+        echo -e "${BLUE}Installing chrony...${NC}"
+        pacman -S --noconfirm chrony
+        systemctl enable chronyd
+    fi
+
+    # Start chronyd if not running
+    if ! systemctl is-active --quiet chronyd; then
+        echo -e "${BLUE}Starting chronyd...${NC}"
+        systemctl start chronyd
+    fi
+
+    # Wait for NTP to synchronize
+    local attempts=0
+    local max_attempts=10
+    local wait_time=5
+    
+    while [ $attempts -lt $max_attempts ]; do
+        if chronyc sources | grep -q "^\*"; then
+            echo -e "${GREEN}NTP synchronized successfully${NC}"
+            return 0
+        fi
+        
+        echo -e "${YELLOW}NTP not synchronized yet, waiting... (${attempts}/${max_attempts})${NC}"
+        sleep $wait_time
+        attempts=$((attempts + 1))
+    done
+
+    echo -e "${RED}Error: Failed to synchronize NTP after ${max_attempts} attempts${NC}"
+    echo -e "${YELLOW}Please verify NTP synchronization manually with these commands:${NC}"
+    echo -e "${GREEN}sudo chronyc sources${NC}"
+    echo -e "${GREEN}sudo chronyc tracking${NC}"
+    echo -e "${GREEN}sudo chronyc sourcestats${NC}"
+    
+    return 1
+}
+
+# Run entropy check
+check_entropy
+
+# Run NTP check
+check_ntp || {
+    echo -e "${RED}Error: NTP synchronization failed${NC}"
+    echo -e "${YELLOW}This can cause package signature verification failures${NC}"
+    echo -e "${YELLOW}Please fix NTP synchronization and try again${NC}"
+    exit 1
+}
+
 # Check system entropy
 if [ -r /proc/sys/kernel/random/entropy_avail ]; then
     entropy=$(cat /proc/sys/kernel/random/entropy_avail)
-    if [ "$entropy" -lt 1000 ]; then
-        echo -e "${YELLOW}Warning: Low system entropy (${entropy}) detected${NC}"
-        echo -e "${YELLOW}This might cause package signature verification to hang${NC}"
-        if ! command -v haveged &>/dev/null; then
-            echo -e "${BLUE}Installing haveged to improve entropy...${NC}"
-            if ! pacman -S --noconfirm haveged &>/dev/null; then
-                echo -e "${RED}Error: Failed to install haveged${NC}"
-                echo -e "${YELLOW}Please install haveged manually or ensure sufficient entropy${NC}"
-                exit 1
+    if [ "$entropy" -lt 500 ]; then
+        echo -e "${YELLOW}Warning: Low system entropy (${entropy}/4096) detected. This might cause package signature verification to hang.${NC}"
             fi
             echo -e "${GREEN}Starting haveged service...${NC}"
             if ! systemctl start haveged &>/dev/null; then
