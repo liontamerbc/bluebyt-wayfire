@@ -422,6 +422,126 @@ main() {
         fi
     done
 
+    # === Wayfire Session Configuration ===
+    header "Configuring Wayfire session"
+    
+    if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+        # Create directory if it doesn't exist
+        if [ ! -d /usr/share/wayland-sessions ]; then
+            run "sudo mkdir -p /usr/share/wayland-sessions"
+            if [ $? -ne 0 ]; then
+                error "Failed to create wayland-sessions directory"
+                exit 1
+            fi
+        fi
+        
+        # Write Wayfire session file
+        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
+[Desktop Entry]
+Name=Wayfire
+Comment=A lightweight and customizable Wayland compositor
+Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
+Type=Application
+EOF
+        if [ $? -ne 0 ]; then
+            error "Failed to create wayfire.desktop file"
+            exit 1
+        fi
+    fi
+
+    # === Wayfire Configuration ===
+    header "Setting up Wayfire configuration"
+    
+    local config_dir="$HOME/.config/wayfire"
+    local config_file="$config_dir/wayfire.ini"
+    
+    if [ ! -d "$config_dir" ]; then
+        run "mkdir -p \"$config_dir\""
+    fi
+    
+    # Create or update wayfire.ini
+    if [ ! -f "$config_file" ] || confirm "Would you like to update Wayfire configuration?"; then
+        sudo tee "$config_file" >/dev/null <<EOF
+[core]
+output_layout = $(wayfire-output-layout)
+
+[output]
+background_color = #000000
+
+[view]
+border_width = 0
+border_color = #000000
+
+[workspaces]
+num_workspaces = 10
+
+[plugins]
+plugins = ipc ipc-rules follow-focus
+
+[autostart]
+launcher = $IPC_DIR/inactive-alpha.py
+EOF
+        if [ $? -ne 0 ]; then
+            error "Failed to create wayfire.ini"
+            exit 1
+        fi
+    fi
+
+    # === Wayfire Plugin Configuration ===
+    header "Configuring Wayfire plugins"
+    
+    # Create plugin configuration directory
+    local plugin_dir="$config_dir/plugins"
+    if [ ! -d "$plugin_dir" ]; then
+        run "mkdir -p \"$plugin_dir\""
+    fi
+    
+    # Configure ipc plugin
+    local ipc_config="$plugin_dir/ipc.ini"
+    if [ ! -f "$ipc_config" ]; then
+        sudo tee "$ipc_config" >/dev/null <<EOF
+[ipc]
+socket_path = /tmp/wayfire-wayland-1.socket
+EOF
+        if [ $? -ne 0 ]; then
+            error "Failed to create ipc configuration"
+            exit 1
+        fi
+    fi
+
+    # === Autostart Configuration ===
+    header "Setting up autostart"
+    
+    local autostart_dir="$HOME/.config/autostart"
+    if [ ! -d "$autostart_dir" ]; then
+        run "mkdir -p \"$autostart_dir\""
+    fi
+    
+    # Create autostart entry for Wayfire
+    sudo tee "$autostart_dir/wayfire.desktop" >/dev/null <<EOF
+[Desktop Entry]
+Name=Wayfire
+Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
+Type=Application
+EOF
+
+    # === Verify Wayfire Installation ===
+    header "Verifying Wayfire installation"
+    
+    if ! command -v wayfire >/dev/null 2>&1; then
+        error "Wayfire installation failed. Please check the logs."
+        exit 1
+    fi
+    
+    local wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    if [ -z "$wayfire_version" ]; then
+        error "Wayfire version verification failed"
+        exit 1
+    fi
+    
+    log "Wayfire version $wayfire_version installed successfully"
+    log "Wayfire session and configuration setup complete"
+
     # === Detect Virtual Machine and Hardware ===
     header "Detecting system type and hardware"
 
@@ -658,7 +778,7 @@ EOF
     # Enable NetworkManager anyway for wired connections
     if ! retry "sudo systemctl enable NetworkManager"; then
         warn "Failed to enable NetworkManager"
-    fi
+    else
         run "sudo systemctl enable NetworkManager"
     fi
 
@@ -972,7 +1092,6 @@ Comment=Wayland compositor
 EOF
     
     run "chmod +x $HOME/.local/bin/start-wayfire"
-    fi
 
     # === GNOME Desktop Installation ===
     header "GNOME Desktop Installation"
@@ -994,6 +1113,8 @@ EOF
             log "Skipping GNOME installation."
         fi
     fi
+    # Continue with Wayfire installation
+    header "Installing Wayfire and dependencies"
 
     # === Wayfire Installation ===
     header "Installing Wayfire and dependencies"
@@ -1384,10 +1505,20 @@ launcher = $IPC_DIR/inactive-alpha.py
 EOF
     fi
 
-    # === Wayfire Session ===
+# === Wayfire Session ===
     header "Creating Wayfire session"
     
     if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
+        # Create directory if it doesn't exist
+        if [ ! -d /usr/share/wayland-sessions ]; then
+            run "sudo mkdir -p /usr/share/wayland-sessions"
+            if [ $? -ne 0 ]; then
+                error "Failed to create wayland-sessions directory"
+                exit 1
+            fi
+        fi
+        
+        # Write Wayfire session file
         sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
 [Desktop Entry]
 Name=Wayfire
@@ -1395,7 +1526,12 @@ Comment=A lightweight and customizable Wayland compositor
 Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
 Type=Application
 EOF
+        if [ $? -ne 0 ]; then
+            error "Failed to create wayfire.desktop file"
+            exit 1
+        fi
     fi
+
 
     # === Verification ===
     header "Verifying installations"
@@ -1413,7 +1549,7 @@ EOF
     fi
 
     # === Final Summary ===
-    echo
+    echoalso
     if [ "$FAILED" = "true" ]; then
         echo -e "${RED}Installation completed with errors.${NC}"
         echo "Please review $LOG_FILE for more information."
