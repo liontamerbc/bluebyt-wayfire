@@ -1,4 +1,4 @@
-cd #!/usr/bin/env bash
+#!/usr/bin/env bash
 
 ################################################################################
 # bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
@@ -47,6 +47,36 @@ SKIP_WALLPAPERS=false
 INSTALL_GNOME=false
 BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 
+# === Trap handlers ===
+trap cleanup EXIT SIGINT SIGTERM
+
+# === Helper Functions ===
+require_bin() {
+    local bin="$1"
+    if ! command -v "$bin" >/dev/null 2>&1; then
+        error "$bin is not installed"
+        return 1
+    fi
+    return 0
+}
+
+# === Main function ===
+main() {
+    # Check for required binaries first
+    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "sha256sum"; then
+        error "Required dependencies are missing. Please install them first."
+        exit 1
+    fi
+
+    # Now define all other functions
+    # (all other function definitions go here)
+}
+
+# === Script entry point ===
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
+
 # === Logging Functions ===
 log() {
     local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
@@ -80,6 +110,12 @@ build_git_pkg() {
     local repo="$1"
     local pkg="$2"
     local build_dir="$SCRIPT_DIR/build_$pkg"
+    
+    # Check required dependencies
+    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "meson" || ! require_bin "ninja"; then
+        error "Required build tools are missing"
+        return 1
+    fi
     
     if [ -d "$build_dir" ]; then
         run "rm -rf \"$build_dir\""
