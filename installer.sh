@@ -19,6 +19,154 @@
 # === Script Setup ===
 set -euo pipefail
 
+# === Critical Safety Checks ===
+# Check if running as root
+if [ "$(id -u)" != "0" ]; then
+    echo -e "${RED}Error: This script must be run as root${NC}"
+    exit 1
+fi
+
+# Check if running on Arch Linux
+if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
+    echo -e "${RED}Error: This script is only compatible with Arch Linux and its derivatives${NC}"
+    exit 1
+fi
+
+# Check system architecture
+ARCH=$(uname -m)
+if [ "$ARCH" != "x86_64" ]; then
+    echo -e "${RED}Error: This script is only compatible with x86_64 architecture${NC}"
+    echo -e "${YELLOW}Detected architecture: $ARCH${NC}"
+    exit 1
+fi
+
+# Check system entropy
+if [ -r /proc/sys/kernel/random/entropy_avail ]; then
+    local entropy=$(cat /proc/sys/kernel/random/entropy_avail)
+    if [ "$entropy" -lt 1000 ]; then
+        echo -e "${YELLOW}Warning: Low system entropy (${entropy}) detected${NC}"
+        echo -e "${YELLOW}This might cause package signature verification to hang${NC}"
+        if ! command -v haveged &>/dev/null; then
+            echo -e "${RED}Error: haveged is not installed to improve entropy${NC}"
+            echo -e "${YELLOW}Please install haveged or ensure sufficient entropy${NC}"
+            exit 1
+        fi
+    fi
+fi
+
+# Check system time
+if command -v timedatectl &>/dev/null; then
+    if ! timedatectl status | grep -q "system clock synchronized: yes"; then
+        echo -e "${RED}Error: System time is not synchronized${NC}"
+        echo -e "${YELLOW}This can cause package signature verification failures${NC}"
+        echo -e "${YELLOW}Please run 'timedatectl set-ntp true' to fix${NC}"
+        exit 1
+    fi
+fi
+
+# Check security modules
+if command -v getenforce &>/dev/null; then
+    if [ "$(getenforce)" = "Enforcing" ]; then
+        echo -e "${YELLOW}Warning: SELinux is in Enforcing mode${NC}"
+        echo -e "${YELLOW}This might interfere with package installation${NC}"
+    fi
+fi
+
+if command -v aa-status &>/dev/null; then
+    if aa-status --enabled; then
+        echo -e "${YELLOW}Warning: AppArmor is enabled${NC}"
+        echo -e "${YELLOW}This might interfere with package installation${NC}"
+    fi
+fi
+
+# Check system load
+local load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
+if (( $(echo "$load > 4" | bc -l) )); then
+    echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
+    echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
+fi
+
+# Check essential system tools
+ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd)
+for tool in "${ESSENTIAL_TOOLS[@]}"; do
+    if ! command -v "$tool" &>/dev/null; then
+        echo -e "${RED}Error: Essential tool not found: $tool${NC}"
+        echo -e "${YELLOW}Please install base system tools first${NC}"
+        exit 1
+    fi
+done
+
+# Check if pacman is available and working
+if ! command -v pacman &>/dev/null; then
+    echo -e "${RED}Error: Pacman package manager not found${NC}"
+    exit 1
+fi
+
+# Verify pacman database is healthy
+if ! pacman -Syy --noconfirm &>/dev/null; then
+    echo -e "${RED}Error: Pacman database is corrupted${NC}"
+    echo -e "${YELLOW}Please run 'pacman -Syyu' to fix the database${NC}"
+    exit 1
+fi
+
+# Check network connectivity
+if ! ping -c 1 archlinux.org &>/dev/null; then
+    echo -e "${RED}Error: No network connectivity detected${NC}"
+    echo -e "${YELLOW}Please ensure your network is properly configured${NC}"
+    exit 1
+fi
+
+# Check filesystem health
+if ! fsck -n / &>/dev/null; then
+    echo -e "${RED}Warning: Filesystem check detected potential issues${NC}"
+    echo -e "${YELLOW}Please run 'fsck -f /' to fix any filesystem issues${NC}"
+fi
+
+# Verify disk space on critical partitions
+DISK_CHECKS=(
+    "/"  # Root partition
+    "/home"  # Home partition if exists
+    "/var"  # Package cache
+)
+
+for mount in "${DISK_CHECKS[@]}"; do
+    if mountpoint -q "$mount"; then
+        local free_space=$(df -m "$mount" | awk 'NR==2 {print $4}')
+        if [ "$free_space" -lt 1000 ]; then  # 1GB minimum
+            echo -e "${RED}Error: Insufficient disk space on $mount${NC}"
+            echo -e "${YELLOW}Free space: $free_space MB${NC}"
+            exit 1
+        fi
+    fi
+done
+
+# Set dynamic resource limits based on system capabilities
+local mem_total=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+local mem_mb=$((mem_total / 1024))
+
+# Set more reasonable limits for minimal Arch
+if [ "$mem_mb" -lt 2048 ]; then
+    ulimit -n 1024  # max open files for low memory systems
+    ulimit -u 512   # max user processes
+else
+    ulimit -n 2048  # max open files
+    ulimit -u 1024  # max user processes
+fi
+
+# Create safe temporary directory
+TEMP_DIR=$(mktemp -d -p /tmp wayfire-installer-XXXXXX)
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+# Backup current system state
+SYSTEM_BACKUP_DIR="$TEMP_DIR/system_state_$(date +%s)"
+mkdir -p "$SYSTEM_BACKUP_DIR"
+
+# Backup essential system files
+run "cp -a /etc/pacman.conf "$SYSTEM_BACKUP_DIR/"
+run "cp -a /etc/fstab "$SYSTEM_BACKUP_DIR/"
+run "cp -a /etc/locale.conf "$SYSTEM_BACKUP_DIR/"
+run "cp -a /etc/timezone "$SYSTEM_BACKUP_DIR/"
+
 # === Constants ===
 readonly SCRIPT_VERSION="3.0.0"
 readonly SCRIPT_NAME="$(basename "$0")"
@@ -218,24 +366,43 @@ require_bin() {
 
 # === Configuration Management ===
 backup_config() {
-    local src="$1"
-    local dest="$2"
-    
-    if [ -d "$src" ]; then
-        run "cp -r \"$src\" \"$dest\""
-        CONFIG_BACKUPS["$src"]="$dest"
-        log "Backed up $src to $dest"
+    local config_dir="$1"
+    if [ -d "$config_dir" ]; then
+        local backup_path="$BACKUP_DIR/$(basename "$config_dir")_$(date +%s)"
+        mkdir -p "$BACKUP_DIR"
+        
+        # Use rsync for more reliable copying
+        if ! rsync -a --delete "$config_dir/" "$backup_path/"; then
+            fatal "Failed to backup configuration directory: $config_dir"
+        fi
+        
+        # Store backup path in array for cleanup
+        CONFIG_BACKUPS["$config_dir"]="$backup_path"
     fi
 }
 
 restore_config() {
-    for src in "${!CONFIG_BACKUPS[@]}"; do
-        local dest="${CONFIG_BACKUPS[$src]}"
-        if [ -d "$dest" ]; then
-            run "cp -r \"$dest\" \"$src\""
-            log "Restored $src from backup"
+    local config_dir="$1"
+    local backup_path="${CONFIG_BACKUPS[$config_dir]}"
+    
+    if [ -d "$backup_path" ]; then
+        # Remove existing directory first
+        if [ -d "$config_dir" ]; then
+            if ! rm -rf "$config_dir"; then
+                warn "Failed to remove existing directory: $config_dir"
+                return 1
+            fi
         fi
-    done
+        
+        # Restore from backup
+        if ! rsync -a --delete "$backup_path/" "$config_dir/"; then
+            warn "Failed to restore configuration from backup: $backup_path"
+            return 1
+        fi
+    else
+        warn "Backup not found for: $config_dir"
+        return 1
+    fi
 }
 
 # === Build Functions ===
@@ -314,34 +481,42 @@ build_git_pkg() {
 
 # === Cleanup ===
 cleanup() {
-    if [ "$FAILED" = "true" ]; then
-        warn "Installation failed. Performing cleanup..."
-        
-        # Remove temporary directories safely
-        local cleanup_dirs=(
-            "$SCRIPT_DIR/build_*"
-            "$SCRIPT_DIR/wayfire"
-            "$SCRIPT_DIR/wf-shell"
-            "$SCRIPT_DIR/wcm"
-            "$SCRIPT_DIR/pixdecor"
-            "$SCRIPT_DIR/Tokyo-Night-GTK-Theme"
-            "$SCRIPT_DIR/Aretha-Dark-Icons"
-        )
-        
-        for dir in "${cleanup_dirs[@]}"; do
-            if [ -d "$dir" ]; then
-                log "Removing temporary directory: $dir"
-                run "rm -rf \"$dir\""
-            fi
-        done
-        
-        # Restore configurations if they exist
-        if [ -n "${CONFIG_BACKUPS[*]}" ]; then
-            restore_config
+    # Restore system state backup first
+    if [ -d "$SYSTEM_BACKUP_DIR" ]; then
+        log "Restoring system state..."
+        run "cp -a "$SYSTEM_BACKUP_DIR/pacman.conf" /etc/pacman.conf"
+        run "cp -a "$SYSTEM_BACKUP_DIR/fstab" /etc/fstab"
+        run "cp -a "$SYSTEM_BACKUP_DIR/locale.conf" /etc/locale.conf"
+        run "cp -a "$SYSTEM_BACKUP_DIR/timezone" /etc/timezone"
+    fi
+    
+    # Restore all backed up configurations
+    for config in "${!CONFIG_BACKUPS[@]}"; do
+        if [ -d "${CONFIG_BACKUPS[$config]}" ]; then
+            restore_config "$config"
         fi
-        
-        warn "Cleanup complete. See $LOG_FILE for details."
-        echo "See $LOG_FILE for detailed installation log"
+    done
+    
+    # Clean package cache if installation failed
+    if [ "$FAILED" = true ]; then
+        if ! pacman -Sc --noconfirm; then
+            warn "Failed to clean package cache"
+        fi
+    fi
+    
+    # Remove temporary files
+    if [ -d "$TEMP_DIR" ]; then
+        if ! rm -rf "$TEMP_DIR"; then
+            warn "Failed to remove temporary directory: $TEMP_DIR"
+        fi
+    fi
+    
+    # Log final status
+    if [ "$FAILED" = true ]; then
+        fatal "Installation failed. Check $LOG_FILE for details"
+    else
+        log "Installation completed successfully"
+        log "System state has been restored"
     fi
 }
 
