@@ -181,9 +181,35 @@ validate_checksum() {
 # === Package Management ===
 require_bin() {
     local bin="$1"
+    local required="$2"  # Optional: true/false, default true
+    local version="$3"   # Optional: minimum required version
+    
+    if [ -z "$required" ]; then required="true"; fi
+    
     if ! command -v "$bin" >/dev/null 2>&1; then
-        error "$bin is not installed"
-        return 1
+        if [ "$required" = "true" ]; then
+            error "$bin is not installed"
+            return 1
+        else
+            warn "$bin is not installed (optional)"
+            return 0
+        fi
+    fi
+    
+    # If version check is requested
+    if [ -n "$version" ]; then
+        local current
+        current="$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1
+        if [ -n "$current" ]; then
+            if [ "$(printf '%s\n' "$version" "$current" | sort -V | head -n1)" != "$version" ]; then
+                if [ "$required" = "true" ]; then
+                    error "$bin version $current is less than required $version"
+                    return 1
+                else
+                    warn "$bin version $current is less than required $version (optional)"
+                fi
+            fi
+        fi
     fi
     return 0
 }
@@ -214,12 +240,48 @@ restore_config() {
 build_git_pkg() {
     local repo="$1"
     local pkg="$2"
+    local cmd="$3"
+    local ver="$4"
     local build_dir="$SCRIPT_DIR/build_$pkg"
     
     # Check required dependencies
-    if ! require_bin "git" || ! require_bin "makepkg" || ! require_bin "meson" || ! require_bin "ninja"; then
-        error "Required build tools are missing"
+    local REQUIRED_TOOLS="git makepkg meson ninja"
+    local missing_tools=""
+    for tool in $REQUIRED_TOOLS; do
+        if ! require_bin "$tool"; then
+            missing_tools="$missing_tools $tool"
+        fi
+    done
+    
+    if [ -n "$missing_tools" ]; then
+        error "Required build tools are missing: $missing_tools"
         return 1
+    fi
+    
+    # Check if package is already installed and meets requirements
+    if [ -n "$cmd" ]; then
+        if command -v "$cmd" >/dev/null 2>&1; then
+            log "$pkg is already installed"
+            if [ -n "$ver" ]; then
+                local installed_ver
+                installed_ver=$(command -v "$cmd" --version 2>/dev/null | head -n1)
+                if [ -z "$installed_ver" ]; then
+                    warn "Could not determine version of $cmd"
+                    return 1
+                else
+                    log "Installed version: $installed_ver"
+                    local current
+                    current="$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1
+                    if [ -n "$current" ]; then
+                        if [ "$(printf '%s\n' "$ver" "$current" | sort -V | head -n1)" != "$ver" ]; then
+                            warn "$cmd version $current is less than required $ver"
+                            return 1
+                        fi
+                    fi
+                fi
+            fi
+            return 0
+        fi
     fi
     
     if [ -d "$build_dir" ]; then
@@ -235,12 +297,10 @@ build_git_pkg() {
         run "meson build"
         run "ninja -C build"
         run "sudo ninja -C build install"
-            fi
-        fi
         
         # Verify installation
         if ! command -v "$cmd" >/dev/null 2>&1; then
-            fatal "Failed to install $cmd. Please check the log file for details."
+            fatal "$cmd is required but failed to install. Please check the log file for details."
         fi
         
         # If version check is requested
@@ -251,19 +311,16 @@ build_git_pkg() {
                 warn "Could not determine version of $cmd"
             else
                 log "Installed version: $installed_ver"
+                local current
+                current=$("$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
+                if [ -n "$current" ]; then
+                    if [ "$(printf '%s\n' "$ver" "$current" | sort -V | head -n1)" != "$ver" ]; then
+                        fatal "$cmd version $current is less than required $ver"
+                    fi
+                fi
             fi
         fi
         return 0
-    fi
-    
-    if [ -n "$ver" ]; then
-        local current
-        current=$("$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
-        if [ -n "$current" ]; then
-            if [ "$(printf '%s\n' "$ver" "$current" | sort -V | head -n1)" != "$ver" ]; then
-                fatal "$cmd version $current is less than required $ver"
-            fi
-        fi
     fi
 }
 
