@@ -112,7 +112,7 @@ check_entropy() {
         # Configure rngd to use hardware random number generator if available
         if [ -f "/etc/conf.d/rngd" ]; then
             echo -e "${BLUE}Configuring rngd...${NC}"
-            sed -i '|^#*RNGD_OPTS=.*|RNGD_OPTS="-r /dev/urandom -o /dev/random -f"|' /etc/conf.d/rngd
+            sed -i 's|^#*RNGD_OPTS=.*|RNGD_OPTS="-r /dev/urandom -o /dev/random -f"|' /etc/conf.d/rngd
         fi
         
         # Start and enable rngd service
