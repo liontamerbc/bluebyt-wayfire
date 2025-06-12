@@ -201,9 +201,7 @@ check_ntp() {
     fi
 
     return 0
-            fi
-        done
-        
+            
         if ! $responding; then
             # Try fallback servers only once
             if [ $attempts -eq 0 ]; then
