@@ -45,10 +45,10 @@ if ! command -v ls >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! com
     fi
     
     echo "Installing core system packages..."
-    if ! pacman -S --noconfirm --needed base base-devel; then
-        echo -e "${RED}Failed to install core packages${NC}"
-        echo -e "${YELLOW}Please run 'pacman -Syu' first, then try again${NC}"
-        exit 1
+    if ! pacman -S --noconfirm --needed base base-devel bc; then
+        echo "Failed to install missing tools. Trying with full system upgrade..."
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm --needed base base-devel bc
     fi
     
     # Verify installation
@@ -57,7 +57,7 @@ if ! command -v ls >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! com
         echo -e "${YELLOW}Please install coreutils manually and try again:${NC}"
         echo -e "    mount -o remount,size=2G /tmp  # If low on memory"
         echo -e "    pacman -Syu"
-        echo -e "    pacman -S --needed base base-devel"
+        echo -e "    pacman -S --needed base base-devel bc"
         exit 1
     fi
     
@@ -126,7 +126,7 @@ if (( $(echo "$load > 4" | bc -l) )); then
 fi
 
 # Check essential system tools
-ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd)
+ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd bc)
 for tool in "${ESSENTIAL_TOOLS[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
         echo -e "${RED}Error: Essential tool not found: $tool${NC}"
@@ -584,9 +584,9 @@ main()
     header "Installing essential packages"
     
     # Install essential tools
-    local ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl pciutils meson wayfire"
+    local ESSENTIALS="git gcc ninja rust nimble sudo lxappearance base-devel libxml2 curl pciutils meson wayfire bc"
     if [ "$INSTALL_ALL" = false ]; then
-        ESSENTIALS="git gcc base-devel curl pciutils meson"
+        ESSENTIALS="git gcc base-devel curl pciutils meson bc"
     fi
     
     # Install packages with retry mechanism
