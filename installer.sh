@@ -145,6 +145,40 @@ check_ntp() {
     systemctl restart chronyd
     systemctl enable chronyd
 
+    # Wait for chronyd to be ready
+    sleep 2
+
+    # Check if chronyd is running
+    if ! systemctl is-active --quiet chronyd; then
+        echo -e "${RED}Error: chronyd failed to start${NC}"
+        return 1
+    fi
+
+    # Check NTP synchronization with timeout
+    local attempts=0
+    local max_attempts=5
+    local wait_time=2
+    local synced=false
+
+    echo -e "${BLUE}Waiting for NTP synchronization...${NC}"
+    while [ $attempts -lt $max_attempts ]; do
+        if chronyc sources | grep -q "^\*"; then
+            echo -e "${GREEN}NTP synchronized successfully with ${ntp_servers}${NC}"
+            synced=true
+            break
+        fi
+
+        echo -e "${BLUE}Attempt ${attempts}/${max_attempts}: Not synchronized yet...${NC}"
+        sleep $wait_time
+        attempts=$((attempts + 1))
+    done
+
+    if ! $synced; then
+        echo -e "${YELLOW}Warning: NTP synchronization timed out${NC}"
+        echo -e "${BLUE}Continuing installation with current time${NC}"
+    fi
+    return 0
+
     # Wait for NTP to synchronize with exponential backoff
     local attempts=0
     local max_attempts=20
