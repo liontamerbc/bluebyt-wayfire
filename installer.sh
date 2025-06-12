@@ -467,9 +467,15 @@ run "cp -a /etc/timezone \"$SYSTEM_BACKUP_DIR/\""
 
 # === Constants ===
 readonly SCRIPT_VERSION="3.0.0"
-readonly SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-readonly LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
+SCRIPT_NAME
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
+SCRIPT_DIR
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+readonly SCRIPT_DIR
+LOG_FILE
+LOG_FILE="$SCRIPT_DIR/install_wayfire_$(date +%F_%T).log"
+readonly LOG_FILE
 readonly MAX_RETRIES=3
 readonly TIMEOUT_SECONDS=300
 
@@ -497,17 +503,20 @@ BACKUP_DIR="$HOME/.config_backup_$(date +%F_%T)"
 # === Core Functions ===
 # === Logging ===
 log() {
-    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${GREEN}[$timestamp] [INFO]${NC} $*" | tee -a "$LOG_FILE"
 }
 
 warn() {
-    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${YELLOW}[$timestamp] [WARN]${NC} $*" | tee -a "$LOG_FILE"
 }
 
 error() {
-    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -e "${RED}[$timestamp] [ERROR]${NC} $*" | tee -a "$LOG_FILE"
     FAILED=true
 }
@@ -519,7 +528,8 @@ fatal() {
 }
 
 progress() {
-    local timestamp="$(date '+%Y-%m-%d %H:%M:%S')"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
     echo -ne "${BLUE}[$timestamp] [PROGRESS]${NC} $*\r" | tee -a "$LOG_FILE"
 }
 
@@ -914,7 +924,8 @@ main() {
     
     # Check disk space
     local required_space=10000  # 10GB minimum required for full installation
-    local available_space=$(df -m / | awk 'NR==2 {print $4}')
+    local available_space
+    available_space=$(df -m / | awk 'NR==2 {print $4}')
     
     if [ "$available_space" -lt "$required_space" ]; then
         error "Insufficient disk space. Required: $required_space MB, Available: $available_space MB"
@@ -1020,22 +1031,21 @@ main() {
     if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
         # Create directory if it doesn't exist
         if [ ! -d /usr/share/wayland-sessions ]; then
-            run "sudo mkdir -p /usr/share/wayland-sessions"
-            if [ $? -ne 0 ]; then
+            if ! run "sudo mkdir -p /usr/share/wayland-sessions"; then
                 error "Failed to create wayland-sessions directory"
                 exit 1
             fi
         fi
         
         # Write Wayfire session file
-        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
+        if ! sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
 [Desktop Entry]
 Name=Wayfire
 Comment=A lightweight and customizable Wayland compositor
 Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
 Type=Application
 EOF
-        if [ $? -ne 0 ]; then
+        then
             error "Failed to create wayfire.desktop file"
             exit 1
         fi
@@ -1534,9 +1544,11 @@ EOF
     
     # Set system timezone
     if [ -f /etc/timezone ]; then
-        local current_tz=$(cat /etc/timezone)
+        local current_tz
+        current_tz=$(cat /etc/timezone)
         if [ -z "$current_tz" ]; then
-            local tz=$(timedatectl list-timezones | grep -i "$(hostname)" | head -n1)
+            local tz
+            tz=$(timedatectl list-timezones | grep -i "$(hostname)" | head -n1)
             if [ -n "$tz" ]; then
                 run "sudo timedatectl set-timezone $tz"
             fi
@@ -1745,8 +1757,10 @@ EOF
     )
     
     for component in "${WAYFIRE_COMPONENTS[@]}"; do
-        local repo=$(echo "$component" | cut -d' ' -f1)
-        local pkg=$(echo "$component" | cut -d' ' -f2)
+        local repo
+        repo=$(echo "$component" | cut -d' ' -f1)
+        local pkg
+        pkg=$(echo "$component" | cut -d' ' -f2)
         
         if ! build_git_pkg "$repo" "$pkg"; then
             error "Failed to build $pkg"
