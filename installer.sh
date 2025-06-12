@@ -65,10 +65,13 @@ check_entropy() {
         fi
         
         # Start rngd if not running
-        if ! systemctl is-active --quiet rngd; then
+        if ! systemctl is-active --quiet rngd.service; then
             echo -e "${BLUE}Starting rngd...${NC}"
-            systemctl start rngd
+            systemctl start rngd.service
         fi
+        
+        # Enable rngd service to start on boot
+        systemctl enable rngd.service 2>/dev/null || true
         
         # Generate some entropy manually
         echo -e "${BLUE}Generating additional entropy...${NC}"
@@ -102,15 +105,6 @@ check_ntp() {
         systemctl enable chronyd
     fi
 
-    # Configure chrony with multiple regional NTP servers
-    local chrony_config="/etc/chrony/chrony.conf"
-    local backup_config="${chrony_config}.backup"
-    
-    # Backup existing config
-    if [ -f "$chrony_config" ]; then
-        cp -f "$chrony_config" "$backup_config"
-    fi
-
     # Get system timezone to determine region
     local timezone=$(timedatectl status | grep "Time zone:" | awk '{print $3}' | cut -d'/' -f1)
     
@@ -138,6 +132,7 @@ check_ntp() {
     esac
 
     # Configure chrony with selected servers
+    local chrony_config="/etc/chrony/chrony.conf"
     echo "# Global NTP servers configuration" > "$chrony_config"
     echo "pool $ntp_servers iburst" >> "$chrony_config"
     echo "keyfile /etc/chrony/chrony.keys" >> "$chrony_config"
@@ -145,6 +140,17 @@ check_ntp() {
     echo "rtcsync" >> "$chrony_config"
     echo "makestep 1.0 3" >> "$chrony_config"
     echo "logdir /var/log/chrony" >> "$chrony_config"
+
+    # Start chronyd service
+    systemctl restart chronyd
+    systemctl enable chronyd
+
+    # Wait for NTP to synchronize with exponential backoff
+    local attempts=0
+    local max_attempts=20
+    local wait_time=5
+    local backoff_factor=1.5
+    local max_wait_time=60
     
     # Start chronyd if not running
     if ! systemctl is-active --quiet chronyd; then
