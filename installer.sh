@@ -47,6 +47,22 @@ if [ "$ARCH" != "x86_64" ]; then
     exit 1
 fi
 
+# Check if running in a virtual environment
+if [ -d /sys/module/kvm ] || [ -d /sys/module/vboxdrv ] || [ -d /sys/module/virtio ]; then
+    echo -e "${YELLOW}Warning: Running in a virtual environment detected${NC}"
+    echo -e "${YELLOW}Virtual environment detected. This may affect time synchronization${NC}"
+    
+    # Adjust NTP synchronization strategy for virtual environments
+    export NTP_SYNC_STRATEGY="virtual"
+fi
+
+# Check network connectivity
+if ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
+    echo -e "${RED}Error: No internet connection detected${NC}"
+    echo -e "${YELLOW}Please ensure your virtual environment has internet access${NC}"
+    exit 1
+fi
+
 # Function to check and improve system entropy
 check_entropy() {
     local entropy
@@ -100,13 +116,21 @@ check_ntp() {
     local attempts=0
     local responding=false
     local ntp_servers="pool.ntp.org"
+    local sync_strategy=${NTP_SYNC_STRATEGY:-"physical"}
 
     echo -e "${BLUE}Checking NTP synchronization...${NC}"
+    echo -e "${BLUE}Using NTP sync strategy: $sync_strategy${NC}"
     
     # Install chrony if not present
     if ! systemctl list-unit-files chronyd.service &>/dev/null; then
         echo -e "${BLUE}Installing chrony...${NC}"
         pacman -S --noconfirm chrony
+    fi
+
+    # For virtual environments, use less aggressive sync strategy
+    if [ "$sync_strategy" = "virtual" ]; then
+        echo -e "${YELLOW}Adjusting NTP settings for virtual environment${NC}"
+        ntp_servers="0.pool.ntp.org 1.pool.ntp.org"
     fi
 
     # Install ntp if not present
