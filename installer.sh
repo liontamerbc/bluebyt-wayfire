@@ -180,6 +180,14 @@ check_ntp() {
             echo "pool $ntp_servers iburst" > "$chrony_config"
             systemctl restart chronyd
             attempts=1
+            
+            # Cap wait time at max_wait_time
+            wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
+            if [ $wait_time -gt $max_wait_time ]; then
+                wait_time=$max_wait_time
+            fi
+            
+            sleep $wait_time
         fi
     fi
 
@@ -189,16 +197,6 @@ check_ntp() {
     echo -e "${YELLOW}You may need to manually set the correct time later${NC}"
     return 0
 }
-        
-        # Cap wait time at max_wait_time
-        wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
-        if [ $wait_time -gt $max_wait_time ]; then
-            wait_time=$max_wait_time
-        fi
-        
-        sleep $wait_time
-        attempts=$((attempts + 1))
-    done
 
     # If all attempts fail, try one final sync with ntpdate as fallback
     if ! command -v ntpdate &>/dev/null; then
