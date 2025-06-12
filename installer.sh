@@ -19,20 +19,49 @@
 set -euo pipefail
 
 # Check and install essential tools
-if ! command -v ls >/dev/null 2>&1; then
-    echo "Essential tool not found: coreutils"
-    echo "Attempting to install coreutils..."
-    if command -v pacman >/dev/null 2>&1; then
-        pacman -Sy --noconfirm coreutils || {
-            echo "Failed to install coreutils. Please run 'pacman -Syu' first, then try again."
-            exit 1
-        }
-        echo "Successfully installed coreutils"
-    else
-        echo "Error: Package manager (pacman) not found. Cannot install coreutils."
-        echo "Please install coreutils manually and try again."
+echo "Checking for essential system tools..."
+if ! command -v ls >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! command -v awk >/dev/null 2>&1; then
+    echo "Essential system tools not found. Attempting to install coreutils and other base packages..."
+    
+    # Check if we have internet connectivity
+    if ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
+        echo -e "${RED}Error: No internet connection detected${NC}"
+        echo -e "${YELLOW}Please ensure you have internet access and try again${NC}"
         exit 1
     fi
+    
+    # Check for pacman
+    if ! command -v pacman >/dev/null 2>&1; then
+        echo -e "${RED}Error: pacman package manager not found${NC}"
+        echo -e "${YELLOW}This script requires an Arch Linux system with pacman${NC}"
+        exit 1
+    fi
+    
+    echo "Updating package databases..."
+    if ! pacman -Sy --noconfirm; then
+        echo -e "${RED}Failed to update package databases${NC}"
+        echo -e "${YELLOW}Please check your internet connection and try again${NC}"
+        exit 1
+    fi
+    
+    echo "Installing core system packages..."
+    if ! pacman -S --noconfirm --needed base base-devel; then
+        echo -e "${RED}Failed to install core packages${NC}"
+        echo -e "${YELLOW}Please run 'pacman -Syu' first, then try again${NC}"
+        exit 1
+    fi
+    
+    # Verify installation
+    if ! command -v ls >/dev/null 2>&1; then
+        echo -e "${RED}Critical error: Failed to install essential tools${NC}"
+        echo -e "${YELLOW}Please install coreutils manually and try again:${NC}"
+        echo -e "    mount -o remount,size=2G /tmp  # If low on memory"
+        echo -e "    pacman -Syu"
+        echo -e "    pacman -S --needed base base-devel"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Successfully installed essential system tools${NC}"
 fi
 
 # === Colors ===
