@@ -70,87 +70,201 @@ fi
 # Function to check and improve system entropy
 check_entropy() {
     local entropy
-    entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
+    local max_attempts=3
+    local attempt=1
+    local min_entropy=2000  # Increased minimum entropy threshold
     
-    if [ "$entropy" -lt 1000 ]; then
-        echo -e "${YELLOW}Low system entropy detected (${entropy}/4096)${NC}"
-        echo -e "${BLUE}Attempting to improve entropy...${NC}"
+    echo -e "${BLUE}Checking system entropy...${NC}"
+    
+    while [ $attempt -le $max_attempts ]; do
+        entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
+        echo -e "${BLUE}Current entropy level: ${entropy}/4096${NC}"
+        
+        if [ "$entropy" -ge $min_entropy ]; then
+            echo -e "${GREEN}Sufficient entropy available (${entropy}/4096)${NC}"
+            return 0
+        fi
+        
+        echo -e "${YELLOW}Low system entropy detected (${entropy}/4096), attempt $attempt/$max_attempts${NC}"
         
         # Install haveged if not present
         if ! command -v haveged &>/dev/null; then
             echo -e "${BLUE}Installing haveged...${NC}"
-            pacman -S --noconfirm haveged
-            systemctl start haveged
-            systemctl enable haveged
+            if ! pacman -S --noconfirm haveged; then
+                echo -e "${YELLOW}Failed to install haveged${NC}"
+            fi
+        fi
+        
+        # Start and enable haveged service
+        if ! systemctl is-active --quiet haveged; then
+            echo -e "${BLUE}Starting haveged service...${NC}"
+            systemctl enable --now haveged
         fi
         
         # Install rng-tools if not installed
         if ! command -v rngd >/dev/null 2>&1; then
             echo -e "${BLUE}Installing rng-tools...${NC}"
             if ! pacman -S --noconfirm rng-tools; then
-                echo -e "${YELLOW}Failed to install rng-tools, continuing without it...${NC}"
-                return 0
+                echo -e "${YELLOW}Failed to install rng-tools${NC}"
             fi
         fi
         
-        # Start rngd if not running
-        if ! systemctl is-active --quiet rngd.service; then
-            echo -e "${BLUE}Starting rngd...${NC}"
-            if ! systemctl start rngd.service; then
-                echo -e "${YELLOW}Failed to start rngd service, continuing without it...${NC}"
-                return 0
-            fi
+        # Configure rngd to use hardware random number generator if available
+        if [ -f "/etc/conf.d/rngd" ]; then
+            echo -e "${BLUE}Configuring rngd...${NC}"
+            sed -i 's/^#*RNGD_OPTS=.*/RNGD_OPTS="-r /dev/urandom -o /dev/random -f"/' /etc/conf.d/rngd
         fi
         
-        # Enable rngd service to start on boot
-        if ! systemctl enable --now rngd.service 2>/dev/null; then
-            echo -e "${YELLOW}Failed to enable rngd service, continuing without it...${NC}"
-            return 0
+        # Start and enable rngd service
+        if ! systemctl is-active --quiet rngd; then
+            echo -e "${BLUE}Starting rngd service...${NC}"
+            systemctl enable --now rngd
         fi
         
-        # Generate some entropy manually
+        # Generate entropy using multiple methods
         echo -e "${BLUE}Generating additional entropy...${NC}"
-        for _ in {1..10}; do
-            dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none
+        for _ in {1..20}; do
+            dd if=/dev/urandom of=/dev/null bs=1024 count=1024 2>/dev/null
+            sleep 0.1
         done
         
-        # Verify entropy after improvements
-        entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
-        echo -e "${GREEN}Current entropy level: ${entropy}/4096${NC}"
+        # Additional entropy sources
+        echo -e "${BLUE}Using alternative entropy sources...${NC}"
+        (ps aux 2>&1 | sha1sum >/dev/null) &
+        (ls -laR /usr/include 2>&1 | sha1sum >/dev/null) &
+        (cat /proc/interrupts 2>&1 | sha1sum >/dev/null) &
+        
+        sleep 2  # Give time for entropy to accumulate
+        
+        attempt=$((attempt + 1))
+    done
+    
+    entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
+    if [ "$entropy" -lt $min_entropy ]; then
+        echo -e "${YELLOW}Warning: Could not achieve sufficient entropy (${entropy}/4096). Continuing, but some operations may be slow.${NC}"
+        return 1
     fi
+    
+    echo -e "${GREEN}Entropy generation successful (${entropy}/4096)${NC}"
+    return 0
 }
 
 # Function to synchronize system clock
 sync_system_clock() {
-    echo -e "${BLUE}Attempting to synchronize system clock...${NC}"
+    local max_attempts=5
+    local attempt=1
+    local sync_success=false
     
-    # Install systemd-timesyncd if not installed
-    if ! systemctl is-active --quiet systemd-timesyncd; then
-        echo -e "${BLUE}Enabling systemd-timesyncd...${NC}"
-        systemctl enable --now systemd-timesyncd
+    echo -e "${BLUE}Starting system clock synchronization...${NC}"
+    
+    # Ensure systemd-timesyncd is installed and enabled
+    if ! pacman -Qi systemd >/dev/null 2>&1; then
+        echo -e "${BLUE}Installing systemd...${NC}"
+        pacman -S --noconfirm systemd
     fi
     
-    # Force time sync
-    if command -v timedatectl >/dev/null 2>&1; then
-        echo -e "${BLUE}Forcing time synchronization...${NC}"
-        timedatectl set-ntp true
-        systemctl restart systemd-timesyncd
-        sleep 2
+    if ! pacman -Qi systemd-sysvcompat >/dev/null 2>&1; then
+        echo -e "${BLUE}Installing systemd-sysvcompat...${NC}"
+        pacman -S --noconfirm systemd-sysvcompat
+    fi
+    
+    # Install chrony for better time synchronization
+    if ! command -v chronyc >/dev/null 2>&1; then
+        echo -e "${BLUE}Installing chrony for better time synchronization...${NC}"
+        pacman -S --noconfirm chrony
+    fi
+    
+    # Configure chrony with multiple reliable NTP servers
+    echo -e "${BLUE}Configuring NTP servers...${NC}"
+    cat > /etc/chrony.conf << EOL
+# Use public NTP servers from the pool.ntp.org project
+server 0.arch.pool.ntp.org iburst
+server 1.arch.pool.ntp.org iburst
+server 2.arch.pool.ntp.org iburst
+server 3.arch.pool.ntp.org iburst
+
+# Use the local system clock as a fallback if all servers fail
+local stratum 10
+
+# Record the rate at which the system clock gains/losses time
+driftfile /var/lib/chrony/drift
+
+# Allow the system clock to be stepped in the first three updates
+# if its offset is larger than 1 second
+makestep 1.0 3
+
+# Enable kernel synchronization of the real-time clock
+rtcsync
+
+# Enable hardware timestamping on all interfaces that support it
+#hwtimestamp *
+
+# Increase the minimum number of selectable sources required to adjust system clock
+minsources 2
+
+# Allow NTP client access from local network
+#allow 192.168.0.0/16
+
+# Serve time even if not synchronized to any NTP server
+#local stratum 10
+
+# Specify directory for log files
+logdir /var/log/chrony
+
+# Select which information is logged
+#log measurements statistics tracking
+EOL
+    
+    # Start and enable chronyd
+    echo -e "${BLUE}Starting chronyd service...${NC}"
+    systemctl enable --now chronyd
+    
+    # Wait for chronyd to start
+    sleep 2
+    
+    # Sync using multiple methods
+    while [ $attempt -le $max_attempts ] && [ "$sync_success" = false ]; do
+        echo -e "${BLUE}Time synchronization attempt $attempt/$max_attempts...${NC}"
         
-        # Show sync status
+        # Force sync with chrony
+        chronyc makestep >/dev/null 2>&1
+        chronyc waitsync 10 0.1 3 1 >/dev/null 2>&1
+        
+        # Force sync with systemd-timesyncd
+        systemctl restart systemd-timesyncd
+        timedatectl set-ntp true
+        
+        # Check sync status
+        if timedatectl show | grep -q 'NTPSynchronized=yes'; then
+            sync_success=true
+            break
+        fi
+        
+        # If still not synced, try with ntpdate as fallback
+        if ! command -v ntpdate >/dev/null 2>&1; then
+            echo -e "${BLUE}Installing ntpdate as fallback...${NC}"
+            pacman -S --noconfirm ntp
+        fi
+        
+        echo -e "${BLUE}Trying ntpdate fallback...${NC}"
+        ntpdate -s pool.ntp.org
+        
+        sleep 2
+        attempt=$((attempt + 1))
+    done
+    
+    # Final status check
+    if [ "$sync_success" = true ] || timedatectl show | grep -q 'NTPSynchronized=yes'; then
+        echo -e "${GREEN}System clock synchronized successfully${NC}"
         echo -e "${GREEN}System time: $(date)${NC}"
         timedatectl timesync-status --no-pager
+        return 0
     else
-        echo -e "${YELLOW}timedatectl not found, cannot synchronize time${NC}"
-    fi
-    
-    # Check NTP synchronization
-    if ! check_ntp; then
-        echo -e "${YELLOW}Warning: Could not synchronize with NTP servers${NC}"
+        echo -e "${YELLOW}Warning: Could not fully synchronize system clock${NC}"
+        echo -e "${YELLOW}System time: $(date)${NC}"
+        timedatectl timesync-status --no-pager || true
         return 1
     fi
-    
-    echo -e "${GREEN}System clock synchronized successfully${NC}"
 }
 
 # Function to check and fix NTP synchronization
