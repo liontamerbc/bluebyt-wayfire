@@ -18,6 +18,13 @@
 # === Script Setup ===
 set -euo pipefail
 
+# Check for essential tools
+if ! command -v ls >/dev/null 2>&1; then
+    echo "Error: Essential tool not found: coreutils"
+    echo "Please install base system tools first with: pacman -S base base-devel"
+    exit 1
+fi
+
 # === Colors ===
 readonly RED='\033[0;31m'
 readonly GREEN='\033[1;32m'
