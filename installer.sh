@@ -98,109 +98,32 @@ check_entropy() {
 check_ntp() {
     echo -e "${BLUE}Checking NTP synchronization...${NC}"
     
-    # Install chrony if not present
-    if ! command -v chronyc &>/dev/null; then
-        echo -e "${BLUE}Installing chrony...${NC}"
-        pacman -S --noconfirm chrony
-        systemctl enable chronyd
+    # Install ntp if not present
+    if ! command -v ntpdate &>/dev/null; then
+        echo -e "${BLUE}Installing NTP utilities...${NC}"
+        pacman -S --noconfirm ntp
     fi
 
-    # Get system timezone to determine region
-    local timezone=$(timedatectl status | grep "Time zone:" | awk '{print $3}' | cut -d'/' -f1)
-    
-    # Select appropriate NTP servers based on region
-    local ntp_servers=""
-    case "$timezone" in
-        "Europe")
-            ntp_servers="0.europe.pool.ntp.org 1.europe.pool.ntp.org 2.europe.pool.ntp.org 3.europe.pool.ntp.org"
-            ;;
-        "America")
-            ntp_servers="0.north-america.pool.ntp.org 1.north-america.pool.ntp.org 2.north-america.pool.ntp.org 3.north-america.pool.ntp.org"
-            ;;
-        "Asia")
-            ntp_servers="0.asia.pool.ntp.org 1.asia.pool.ntp.org 2.asia.pool.ntp.org 3.asia.pool.ntp.org"
-            ;;
-        "Africa")
-            ntp_servers="0.africa.pool.ntp.org 1.africa.pool.ntp.org 2.africa.pool.ntp.org 3.africa.pool.ntp.org"
-            ;;
-        "Australia")
-            ntp_servers="0.oceania.pool.ntp.org 1.oceania.pool.ntp.org 2.oceania.pool.ntp.org 3.oceania.pool.ntp.org"
-            ;;
-        *)
-            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
-            ;;
-    esac
-
-    # Configure chrony with selected servers
-    local chrony_config="/etc/chrony/chrony.conf"
-    echo "# Global NTP servers configuration" > "$chrony_config"
-    echo "pool $ntp_servers iburst" >> "$chrony_config"
-    echo "keyfile /etc/chrony/chrony.keys" >> "$chrony_config"
-    echo "driftfile /var/lib/chrony/drift" >> "$chrony_config"
-    echo "rtcsync" >> "$chrony_config"
-    echo "makestep 1.0 3" >> "$chrony_config"
-    echo "logdir /var/log/chrony" >> "$chrony_config"
-
-    # Start chronyd service
-    systemctl restart chronyd
-    systemctl enable chronyd
-
-    # Wait for chronyd to be ready
-    sleep 2
-
-    # Check if chronyd is running
-    if ! systemctl is-active --quiet chronyd; then
-        echo -e "${RED}Error: chronyd failed to start${NC}"
-        echo -e "${BLUE}Service status:${NC}"
-        systemctl status chronyd
-        return 1
-    fi
-
-    # Attempt to synchronize with a timeout
-    local attempts=0
-    local max_attempts=5
-    local wait_time=2
-    local synced=false
-
-    echo -e "${BLUE}Waiting for NTP synchronization...${NC}"
-    while [ $attempts -lt $max_attempts ]; do
-        if chronyc sources | grep -q "^\*"; then
-            echo -e "${GREEN}NTP synchronized successfully with ${ntp_servers}${NC}"
-            synced=true
-            break
-        fi
-
-        # Check if any servers are responding
-        local responding=false
-        for server in $ntp_servers; do
-            if ping -c 1 -W 1 "$server" &>/dev/null; then
-                responding=true
-                break
-            fi
-        done
-
-        if ! $responding; then
-            echo -e "${YELLOW}Warning: No NTP servers responding${NC}"
-            echo -e "${BLUE}Switching to fallback servers...${NC}"
-            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
-            echo "pool $ntp_servers iburst" > "$chrony_config"
-            systemctl restart chronyd
-            sleep 1
-            continue
-        fi
-
-        echo -e "${BLUE}Attempt ${attempts}/${max_attempts}: Not synchronized yet...${NC}"
-        sleep $wait_time
-        attempts=$((attempts + 1))
-    done
-
-    if ! $synced; then
-        echo -e "${YELLOW}Warning: NTP synchronization timed out${NC}"
-        echo -e "${BLUE}Continuing installation with current time${NC}"
+    # Try to synchronize time immediately using ntpdate
+    echo -e "${BLUE}Attempting to synchronize system time...${NC}"
+    if ntpdate -u pool.ntp.org &>/dev/null; then
+        echo -e "${GREEN}System time synchronized successfully${NC}"
         return 0
     fi
 
+    # If ntpdate fails, try using timedatectl
+    echo -e "${YELLOW}ntpdate failed, trying timedatectl...${NC}"
+    if timedatectl set-ntp true; then
+        echo -e "${GREEN}NTP service enabled${NC}"
+        return 0
+    fi
+
+    # If both methods fail, warn but continue
+    echo -e "${RED}Warning: Failed to synchronize system time${NC}"
+    echo -e "${YELLOW}Continuing installation with current time${NC}"
+    echo -e "${YELLOW}You may need to manually set the correct time later${NC}"
     return 0
+}
             
         if ! $responding; then
             # Try fallback servers only once
