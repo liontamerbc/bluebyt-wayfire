@@ -27,6 +27,11 @@ readonly BLUE='\033[1;34m'
 readonly NC='\033[0m'
 
 # === Critical Safety Checks ===
+# Initialize wait time variables
+local wait_time=5
+local max_wait_time=30
+local backoff_factor=1.5
+
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
     echo -e "${RED}Error: This script must be run as root${NC}"
@@ -117,6 +122,9 @@ check_ntp() {
     local responding=false
     local ntp_servers="pool.ntp.org"
     local sync_strategy=${NTP_SYNC_STRATEGY:-"physical"}
+    local wait_time=5
+    local max_wait_time=30
+    local backoff_factor=1.5
 
     echo -e "${BLUE}Checking NTP synchronization...${NC}"
     echo -e "${BLUE}Using NTP sync strategy: $sync_strategy${NC}"
