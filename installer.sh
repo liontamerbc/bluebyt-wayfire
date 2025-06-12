@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 ################################################################################
 # bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
 # Maintainer: liontamerbc
@@ -96,7 +95,7 @@ check_entropy() {
         
         # Generate some entropy manually
         echo -e "${BLUE}Generating additional entropy...${NC}"
-        for i in {1..10}; do
+        for _ in {1..10}; do
             dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none
         done
         
@@ -159,7 +158,7 @@ check_ntp() {
 
     # Try to synchronize time immediately using ntpdate
     echo -e "${BLUE}Attempting to synchronize system time...${NC}"
-    if ntpdate -u $ntp_servers &>/dev/null; then
+    if ntpdate -u "$ntp_servers" &>/dev/null; then
         echo -e "${GREEN}System time synchronized successfully${NC}"
         return 0
     fi
@@ -183,11 +182,11 @@ check_ntp() {
             
             # Cap wait time at max_wait_time
             wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
-            if [ $wait_time -gt $max_wait_time ]; then
-                wait_time=$max_wait_time
+            if [ "$wait_time" -gt "$max_wait_time" ]; then
+                wait_time="$max_wait_time"
             fi
             
-            sleep $wait_time
+            sleep "$wait_time"
         fi
     fi
 
@@ -224,26 +223,14 @@ check_ntp() {
 
     # As a last resort, try setting time manually
     echo -e "${BLUE}Attempting manual time synchronization...${NC}"
-    local current_time=$(date -u +%s)
-    local target_time=$((current_time + 3600))  # Add 1 hour to ensure we're in the future
-    date -u -s "@${target_time}" &>/dev/null
-    hwclock -w &>/dev/null
-    
-    if [ $? -eq 0 ]; then
+    local current_time
+    current_time=$(date -u +%s)
+    local target_time
+    target_time=$((current_time + 3600))  # Add 1 hour to ensure we're in the future
+    if date -u -s "@${target_time}" &>/dev/null && hwclock -w &>/dev/null; then
         echo -e "${GREEN}Successfully synchronized time manually${NC}"
         return 0
     fi
-
-    # If we have a backup config, restore it
-    if [ -n "${backup_config:-}" ] && [ -f "$backup_config" ]; then
-        cp -f "$backup_config" "$chrony_config"
-        rm -f "$backup_config"
-    fi
-    
-    echo -e "${RED}Error: Failed to synchronize NTP after all attempts${NC}"
-    echo -e "${YELLOW}Continuing installation with current time...${NC}"
-    return 0  # Don't fail the entire installation
-}
 
     # Start chronyd if not running
     if ! systemctl is-active --quiet chronyd; then
@@ -252,35 +239,35 @@ check_ntp() {
     fi
 
     # Wait for NTP to synchronize with exponential backoff
-    local attempts=0
-    local max_attempts=20
-    local wait_time=5
-    local backoff_factor=1.5
-    local max_wait_time=60
+    local ntp_attempts=0
+    local ntp_max_attempts=20
+    local ntp_wait_time=5
+    local ntp_backoff_factor=1.5
+    local ntp_max_wait_time=60
     
-    while [ $attempts -lt $max_attempts ]; do
+    while [ "$ntp_attempts" -lt "$ntp_max_attempts" ]; do
         if chronyc sources | grep -q "^\\*"; then
             echo -e "${GREEN}NTP synchronized successfully with ${ntp_servers}${NC}"
             return 0
         fi
         
         # Don't show status messages after first attempt to avoid spam
-        if [ $attempts -eq 0 ]; then
+        if [ "$ntp_attempts" -eq 0 ]; then
             echo -e "${BLUE}Attempting to synchronize with NTP servers...${NC}"
         fi
         
         # Check if any servers are responding
-        local responding=false
+        local ntp_responding=false
         for server in $ntp_servers; do
             if ping -c 1 -W 2 "$server" &>/dev/null; then
-                responding=true
+                ntp_responding=true
                 break
             fi
         done
         
-        if ! $responding; then
+        if ! $ntp_responding; then
             # Try fallback servers only once
-            if [ $attempts -eq 0 ]; then
+            if [ "$ntp_attempts" -eq 0 ]; then
                 echo -e "${BLUE}Switching to fallback NTP servers...${NC}"
                 ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
                 echo "pool $ntp_servers iburst" > "$chrony_config"
@@ -289,15 +276,15 @@ check_ntp() {
         fi
         
         # Cap wait time at max_wait_time
-        wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
-        if [ $wait_time -gt $max_wait_time ]; then
-            wait_time=$max_wait_time
+        ntp_wait_time=$(awk "BEGIN {print int($ntp_wait_time * $ntp_backoff_factor)}")
+        if [ "$ntp_wait_time" -gt "$ntp_max_wait_time" ]; then
+            ntp_wait_time="$ntp_max_wait_time"
         fi
         
-        sleep $wait_time
-        attempts=$((attempts + 1))
+        sleep "$ntp_wait_time"
+        ntp_attempts=$((ntp_attempts + 1))
     done
-
+    
     # If we have a backup config, restore it
     if [ -n "${backup_config:-}" ] && [ -f "$backup_config" ]; then
         cp -f "$backup_config" "$chrony_config"
@@ -447,18 +434,22 @@ for mount in "${DISK_CHECKS[@]}"; do
     fi
 done
 
-# Set dynamic resource limits based on system capabilities
-local mem_total=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-local mem_mb=$((mem_total / 1024))
+# Function to set resource limits based on system capabilities
+set_resource_limits() {
+    local mem_total
+    mem_total=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    local mem_mb
+    mem_mb=$((mem_total / 1024))
 
-# Set more reasonable limits for minimal Arch
-if [ "$mem_mb" -lt 2048 ]; then
-    ulimit -n 1024  # max open files for low memory systems
-    ulimit -u 512   # max user processes
-else
-    ulimit -n 2048  # max open files
-    ulimit -u 1024  # max user processes
-fi
+    # Set more reasonable limits for minimal Arch
+    if [ "$mem_mb" -lt 2048 ]; then
+        ulimit -n 1024  # max open files for low memory systems
+        ulimit -u 512   # max user processes
+    else
+        ulimit -n 2048  # max open files
+        ulimit -u 1024  # max user processes
+    fi
+}
 
 # Create safe temporary directory
 TEMP_DIR=$(mktemp -d -p /tmp wayfire-installer-XXXXXX)
@@ -469,10 +460,10 @@ SYSTEM_BACKUP_DIR="$TEMP_DIR/system_state_$(date +%s)"
 mkdir -p "$SYSTEM_BACKUP_DIR"
 
 # Backup essential system files
-run "cp -a /etc/pacman.conf "$SYSTEM_BACKUP_DIR/"
-run "cp -a /etc/fstab "$SYSTEM_BACKUP_DIR/"
-run "cp -a /etc/locale.conf "$SYSTEM_BACKUP_DIR/"
-run "cp -a /etc/timezone "$SYSTEM_BACKUP_DIR/"
+run "cp -a /etc/pacman.conf \"$SYSTEM_BACKUP_DIR/\""
+run "cp -a /etc/fstab \"$SYSTEM_BACKUP_DIR/\""
+run "cp -a /etc/locale.conf \"$SYSTEM_BACKUP_DIR/\""
+run "cp -a /etc/timezone \"$SYSTEM_BACKUP_DIR/\""
 
 # === Constants ===
 readonly SCRIPT_VERSION="3.0.0"
@@ -598,7 +589,7 @@ retry() {
             return 0
         fi
         warn "Attempt $i/$retries failed. Retrying in $delay seconds..."
-        sleep $delay
+        sleep "$delay"
         ((delay+=5))
     done
     return 1
@@ -609,7 +600,7 @@ timeout() {
     shift
     local cmd="$*"
     
-    if ! timeout --preserve-status $timeout "$cmd"; then
+    if ! timeout --preserve-status "$timeout" "$cmd"; then
         error "Command timed out after $timeout seconds: $cmd"
         return 1
     fi
@@ -791,10 +782,10 @@ cleanup() {
     # Restore system state backup first
     if [ -d "$SYSTEM_BACKUP_DIR" ]; then
         log "Restoring system state..."
-        run "cp -a "$SYSTEM_BACKUP_DIR/pacman.conf" /etc/pacman.conf"
-        run "cp -a "$SYSTEM_BACKUP_DIR/fstab" /etc/fstab"
-        run "cp -a "$SYSTEM_BACKUP_DIR/locale.conf" /etc/locale.conf"
-        run "cp -a "$SYSTEM_BACKUP_DIR/timezone" /etc/timezone"
+        run "cp -a \"$SYSTEM_BACKUP_DIR/pacman.conf\" /etc/pacman.conf"
+        run "cp -a \"$SYSTEM_BACKUP_DIR/fstab\" /etc/fstab"
+        run "cp -a \"$SYSTEM_BACKUP_DIR/locale.conf\" /etc/locale.conf"
+        run "cp -a \"$SYSTEM_BACKUP_DIR/timezone\" /etc/timezone"
     fi
     
     # Restore all backed up configurations
