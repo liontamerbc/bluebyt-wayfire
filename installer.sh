@@ -327,8 +327,6 @@ if [ -r /proc/sys/kernel/random/entropy_avail ]; then
             echo -e "${YELLOW}Warning: Entropy still low after haveged installation (${entropy})${NC}"
             echo -e "${YELLOW}Continuing installation with existing entropy${NC}"
         fi
-    fi
-fi
 
 # Check system time
 if command -v timedatectl &>/dev/null; then
