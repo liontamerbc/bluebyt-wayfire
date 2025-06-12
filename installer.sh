@@ -118,22 +118,23 @@ if command -v aa-status &>/dev/null; then
     fi
 fi
 
-# Check system load
-load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
-if (( $(echo "$load > 4" | bc -l) )); then
-    echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
-    echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
-fi
-
-# Check essential system tools
+# Check essential system tools first
 ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd bc)
 for tool in "${ESSENTIAL_TOOLS[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
         echo -e "${RED}Error: Essential tool not found: $tool${NC}"
         echo -e "${YELLOW}Please install base system tools first${NC}"
+        echo -e "${YELLOW}You can install them with: pacman -S --needed bash coreutils grep sed awk findutils systemd bc${NC}"
         exit 1
     fi
 done
+
+# Now that we have bc, we can do the system load check
+load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
+if (( $(echo "$load > 4" | bc -l) )); then
+    echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
+    echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
+fi
 
 # Check if pacman is available and working
 if ! command -v pacman &>/dev/null; then
