@@ -84,14 +84,29 @@ check_entropy() {
             systemctl enable haveged
         fi
         
+        # Install rng-tools if not installed
+        if ! command -v rngd >/dev/null 2>&1; then
+            echo -e "${BLUE}Installing rng-tools...${NC}"
+            if ! pacman -S --noconfirm rng-tools; then
+                echo -e "${YELLOW}Failed to install rng-tools, continuing without it...${NC}"
+                return 0
+            fi
+        fi
+        
         # Start rngd if not running
         if ! systemctl is-active --quiet rngd.service; then
             echo -e "${BLUE}Starting rngd...${NC}"
-            systemctl start rngd.service
+            if ! systemctl start rngd.service; then
+                echo -e "${YELLOW}Failed to start rngd service, continuing without it...${NC}"
+                return 0
+            fi
         fi
         
         # Enable rngd service to start on boot
-        systemctl enable rngd.service 2>/dev/null || true
+        if ! systemctl enable --now rngd.service 2>/dev/null; then
+            echo -e "${YELLOW}Failed to enable rngd service, continuing without it...${NC}"
+            return 0
+        fi
         
         # Generate some entropy manually
         echo -e "${BLUE}Generating additional entropy...${NC}"
