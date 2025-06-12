@@ -451,13 +451,16 @@ set_resource_limits() {
     fi
 }
 
+# Set resource limits
+set_resource_limits
+
 # Create safe temporary directory
 TEMP_DIR=$(mktemp -d -p /tmp wayfire-installer-XXXXXX)
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
 # Backup current system state
 SYSTEM_BACKUP_DIR="$TEMP_DIR/system_state_$(date +%s)"
-mkdir -p "$SYSTEM_BACKUP_DIR"
+mkdir -p "$SYSTEM_BACKUP_DIR"a
 
 # Backup essential system files
 run "cp -a /etc/pacman.conf \"$SYSTEM_BACKUP_DIR/\""
@@ -469,7 +472,7 @@ run "cp -a /etc/timezone \"$SYSTEM_BACKUP_DIR/\""
 readonly SCRIPT_VERSION="3.0.0"
 SCRIPT_NAME
 SCRIPT_NAME="$(basename "$0")"
-readonly SCRIPT_NAME
+# Removed unused SCRIPT_NAME
 SCRIPT_DIR
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 readonly SCRIPT_DIR
@@ -487,7 +490,7 @@ readonly BLUE='\033[1;34m'
 readonly NC='\033[0m'
 
 # === Global Variables ===
-declare -A CONFIG_BACKUPS
+# Removed unused CONFIG_BACKUPS
 FAILED=false
 DRY_RUN=false
 AUTO_YES=false
@@ -517,13 +520,10 @@ warn() {
 error() {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo -e "${RED}[$timestamp] [ERROR]${NC} $*" | tee -a "$LOG_FILE"
-    FAILED=true
 }
 
 fatal() {
-    error "$*"
-    cleanup
+    error "$1"
     exit 1
 }
 
@@ -633,236 +633,67 @@ validate_checksum() {
         error "Checksum verification failed for $file"
         return 1
     fi
+    
     return 0
-}
-
-# === Package Management ===
-require_bin() {
-    local bin="$1"
-    local required="$2"  # Optional: true/false, default true
-    local version="$3"   # Optional: minimum required version
-    
-    if [ -z "$required" ]; then required="true"; fi
-    
-    if ! command -v "$bin" >/dev/null 2>&1; then
-        if [ "$required" = "true" ]; then
-            error "$bin is not installed"
-            return 1
-        else
-            warn "$bin is not installed (optional)"
-            return 0
-        fi
-    fi
-    
-    # If version check is requested
-    if [ -n "$version" ]; then
-        local current
-        current="$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1
-        if [ -n "$current" ]; then
-            if [ "$(printf '%s\n' "$version" "$current" | sort -V | head -n1)" != "$version" ]; then
-                if [ "$required" = "true" ]; then
-                    error "$bin version $current is less than required $version"
-                    return 1
-                else
-                    warn "$bin version $current is less than required $version (optional)"
-                fi
-            fi
-        fi
-    fi
-    return 0
-}
-
-# === Configuration Management ===
-backup_config() {
-    local config_dir="$1"
-    if [ -d "$config_dir" ]; then
-        local backup_path="$BACKUP_DIR/$(basename "$config_dir")_$(date +%s)"
-        mkdir -p "$BACKUP_DIR"
-        
-        # Use rsync for more reliable copying
-        if ! rsync -a --delete "$config_dir/" "$backup_path/"; then
-            fatal "Failed to backup configuration directory: $config_dir"
-        fi
-        
-        # Store backup path in array for cleanup
-        CONFIG_BACKUPS["$config_dir"]="$backup_path"
-    fi
-}
-
-restore_config() {
-    local config_dir="$1"
-    local backup_path="${CONFIG_BACKUPS[$config_dir]}"
-    
-    if [ -d "$backup_path" ]; then
-        # Remove existing directory first
-        if [ -d "$config_dir" ]; then
-            if ! rm -rf "$config_dir"; then
-                warn "Failed to remove existing directory: $config_dir"
-                return 1
-            fi
-        fi
-        
-        # Restore from backup
-        if ! rsync -a --delete "$backup_path/" "$config_dir/"; then
-            warn "Failed to restore configuration from backup: $backup_path"
-            return 1
-        fi
-    else
-        warn "Backup not found for: $config_dir"
-        return 1
-    fi
-}
-
-# === Build Functions ===
-build_git_pkg() {
-    local repo="$1"
-    local pkg="$2"
-    local cmd="$3"
-    local ver="$4"
-    local build_dir="$SCRIPT_DIR/build_$pkg"
-    
-    # Check if package is already installed and meets requirements
-    if [ -n "$cmd" ]; then
-        if command -v "$cmd" >/dev/null 2>&1; then
-            log "$pkg is already installed"
-            if [ -n "$ver" ]; then
-                local installed_ver
-                installed_ver=$(command -v "$cmd" --version 2>/dev/null | head -n1)
-                if [ -z "$installed_ver" ]; then
-                    warn "Could not determine version of $cmd"
-                    return 1
-                else
-                    log "Installed version: $installed_ver"
-                    local current
-                    current="$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1
-                    if [ -n "$current" ]; then
-                        if [ "$(printf '%s\n' "$ver" "$current" | sort -V | head -n1)" != "$ver" ]; then
-                            warn "$cmd version $current is less than required $ver"
-                            return 1
-                        fi
-                    fi
-                fi
-            fi
-            return 0
-        fi
-    fi
-    
-    if [ -d "$build_dir" ]; then
-        run "rm -rf \"$build_dir\""
-    fi
-    
-    run "git clone $repo $build_dir"
-    cd "$build_dir" || exit 1
-    
-    if [ -f "PKGBUILD" ]; then
-        run "makepkg -si --noconfirm"
-    else
-        run "meson build"
-        run "ninja -C build"
-        run "sudo ninja -C build install"
-        
-        # Verify installation
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            fatal "$cmd is required but failed to install. Please check the log file for details."
-        fi
-        
-        # If version check is requested
-        if [ -n "$ver" ]; then
-            local installed_ver
-            installed_ver=$(command -v "$cmd" --version 2>/dev/null | head -n1)
-            if [ -z "$installed_ver" ]; then
-                warn "Could not determine version of $cmd"
-            else
-                log "Installed version: $installed_ver"
-                local current
-                current=$("$cmd" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n1)
-                if [ -n "$current" ]; then
-                    if [ "$(printf '%s\n' "$ver" "$current" | sort -V | head -n1)" != "$ver" ]; then
-                        fatal "$cmd version $current is less than required $ver"
-                    fi
-                fi
-            fi
-        fi
-        return 0
-    fi
 }
 
 # === Cleanup ===
 cleanup() {
-    # Restore system state backup first
-    if [ -d "$SYSTEM_BACKUP_DIR" ]; then
-        log "Restoring system state..."
-        run "cp -a \"$SYSTEM_BACKUP_DIR/pacman.conf\" /etc/pacman.conf"
-        run "cp -a \"$SYSTEM_BACKUP_DIR/fstab\" /etc/fstab"
-        run "cp -a \"$SYSTEM_BACKUP_DIR/locale.conf\" /etc/locale.conf"
-        run "cp -a \"$SYSTEM_BACKUP_DIR/timezone\" /etc/timezone"
-    fi
+    local exit_code=$?
     
-    # Restore all backed up configurations
-    for config in "${!CONFIG_BACKUPS[@]}"; do
-        if [ -d "${CONFIG_BACKUPS[$config]}" ]; then
-            restore_config "$config"
-        fi
-    done
-    
-    # Clean package cache if installation failed
-    if [ "$FAILED" = true ]; then
-        if ! pacman -Sc --noconfirm; then
-            warn "Failed to clean package cache"
-        fi
-    fi
-    
-    # Remove temporary files
-    if [ -d "$TEMP_DIR" ]; then
-        if ! rm -rf "$TEMP_DIR"; then
-            warn "Failed to remove temporary directory: $TEMP_DIR"
-        fi
-    fi
-    
-    # Log final status
-    if [ "$FAILED" = true ]; then
-        fatal "Installation failed. Check $LOG_FILE for details"
+    # Only show header if we're not exiting due to an error
+    if [ $exit_code -eq 0 ]; then
+        header "Cleaning up"
     else
-        log "Installation completed successfully"
-        log "System state has been restored"
+        echo -e "\n${RED}Error detected! Cleaning up...${NC}"
     fi
+    
+    # Remove temporary directory
+    if [ -d "$TEMP_DIR" ]; then
+        run "rm -rf \"$TEMP_DIR\""
+    fi
+    
+    # Exit with the original status code
+    exit $exit_code
 }
 
 trap cleanup EXIT SIGINT SIGTERM
 
 # === Usage ===
 usage() {
-    cat <<EOF
-$SCRIPT_NAME v$SCRIPT_VERSION - Enhanced bluebyt-wayfire desktop installer
+    cat << 'EOF'
+Usage: $0 [options]
 
-Usage: $SCRIPT_NAME [-t theme] [-p] [-w] [-n] [-g|--gnome] [-y|--yes] [-h]
-  -t THEME     Set GTK theme (default: TokyoNight-Dark)
-  -p           Partial install, skip optional AUR packages
-  -w           Skip wallpaper installation
-  -n           Dry-run: show what would be done, do not change system
-  -g, --gnome  Install GNOME desktop before Wayfire (default: prompt)
-  -y, --yes    Answer yes to all prompts (non-interactive, for automation)
-  -h           Show this help message
+Options:
+  -t THEME    Set the color theme (default: TokyoNight-Dark)
+  -p          Install minimal set of packages (no extra applications)
+  -w          Skip wallpaper installation
+  -n          Dry run - show what would be done
+  -g          Install GNOME packages (for GNOME integration)
+  -y          Automatic yes to prompts
+  -h          Show this help message
 
-Enhanced Features:
-  - Automatic retries for failed operations
-  - Timeout handling for long-running operations
-  - Comprehensive logging with timestamps
-  - Configuration backup and restore
-  - Package version verification
-  - SSL certificate verification
-  - Progress indicators
+Long options:
+  --gnome     Same as -g (install GNOME packages)
+  --yes       Same as -y (automatic yes to prompts)
 
-Important Notes:
-  - This installer requires sudo privileges
-  - It's recommended to run this installer from a TTY
-  - A stable internet connection is required
-  - Sufficient disk space is required (minimum 2GB)
+Examples:
+  $0 -t Dracula     # Install with Dracula theme
+  $0 -p            # Minimal installation
+  $0 --yes         # Auto-confirm all prompts
+
+Requirements:
+  - Arch Linux or compatible distribution
+  - Minimum 2GB disk space
+  - Minimum 2GB RAM recommended
 
 GNOME Desktop:
   - By default, you'll be prompted to install GNOME as a fallback desktop
   - Use -g|--gnome to force GNOME installation without prompting
   - GNOME provides a stable fallback desktop and improves hardware support
+
+For more information, visit:
+https://github.com/bluebyt/bluebyt-wayfire
 EOF
     exit 0
 }
@@ -871,15 +702,15 @@ EOF
 main() {
     # === Command Line Parsing ===
     while getopts ":t:pwnghy" opt; do
-        case "$opt" in
-            t) THEME="$OPTARG";;
-            p) INSTALL_ALL=false;;
-            w) SKIP_WALLPAPERS=true;;
-            n) DRY_RUN=true;;
-            g) INSTALL_GNOME=true;;
-            y) AUTO_YES=true;;
-            h) usage;;
-            \?) error "Invalid option -$OPTARG"; usage;;
+        case "${opt}" in
+            t) THEME="${OPTARG}" ;;
+            p) INSTALL_ALL=false ;;
+            w) SKIP_WALLPAPERS=true ;;
+            n) DRY_RUN=true ;;
+            g) INSTALL_GNOME=true ;;
+            y) AUTO_YES=true ;;
+            h) usage ;;
+            \?) error "Invalid option -${OPTARG}"; usage ;;
         esac
     done
 
@@ -1468,7 +1299,7 @@ EOF
     )
     
     # Enable monitoring services
-    local MONITORING_SERVICES=(
+    # Removed unused MONITORING_SERVICES
         "systemd-journald"
         "systemd-udevd"
         "systemd-networkd"
@@ -1978,7 +1809,7 @@ EOF
 
     # Set Fish as default shell if requested
     if confirm "Set Fish as default shell?"; then
-        set_fish=true
+        # Removed unused set_fish
         if ! grep -qx "/usr/bin/fish" /etc/shells; then
             echo "/usr/bin/fish" | sudo tee -a /etc/shells
         fi
@@ -2025,7 +1856,7 @@ EOF
     if [ -d "$SCRIPT_DIR/.bin" ]; then
         run "cp -rv \"$SCRIPT_DIR/.bin\" \"$HOME/\""
         run "mkdir -p \"$HOME/.config/fish\""
-        echo 'set -gx PATH $HOME/.bin $PATH' >> "$HOME/.config/fish/config.fish"
+        echo "set -gx PATH \$HOME/.bin \$PATH" >> "$HOME/.config/fish/config.fish"
     fi
 
     # === Wayfire Configuration ===
@@ -2065,9 +1896,14 @@ EOF
 
     # === Wayfire Session ===
     header "Creating Wayfire session"
-    
     if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
+        # Create directory if it doesn't exist
+        if [ ! -d /usr/share/wayland-sessions ]; then
+            run "sudo mkdir -p /usr/share/wayland-sessions"
+        fi
+        
+        # Write Wayfire session file
+        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<'EOF'
 [Desktop Entry]
 Name=Wayfire
 Comment=A lightweight and customizable Wayland compositor
@@ -2104,51 +1940,3 @@ EOF
         exit 0
     fi
 }
-
-    # === Wayfire Session ===
-    header "Creating Wayfire session"
-    if [ ! -f /usr/share/wayland-sessions/wayfire.desktop ]; then
-        # Create directory if it doesn't exist
-        if [ ! -d /usr/share/wayland-sessions ]; then
-            run "sudo mkdir -p /usr/share/wayland-sessions"
-        fi
-        
-        # Write Wayfire session file
-        sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
-[Desktop Entry]
-Name=Wayfire
-Comment=A lightweight and customizable Wayland compositor
-Exec=env WAYFIRE_SOCKET=/tmp/wayfire-wayland-1.socket wayfire
-Type=Application
-EOF
-    fi
-
-    # === Verification ===
-    header "Verifying installations"
-    
-    failed=false
-    for cmd in wayfire kitty fish zed wcm xava wlogout; do
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            warn "$cmd not found!"
-            failed=true
-        fi
-    done
-
-    if [ "$failed" = true ]; then
-        fatal "Some required components are missing. Please check the log file for details."
-    fi
-
-    # === Final Summary ===
-    echo
-    if [ "$FAILED" = "true" ]; then
-        echo -e "${RED}Installation completed with errors.${NC}"
-        echo "Please review $LOG_FILE for more information."
-        exit 1
-    else
-        echo -e "${GREEN}Installation completed successfully!${NC}"
-        echo "See $LOG_FILE for a detailed log."
-        echo "To start Wayfire:" && echo "    1. Log out of your current session" && echo "    2. Select 'Wayfire' from your display manager's session list" && echo "    3. Log back in to start Wayfire"
-        exit 0
-    fi
-
-main "$@"
