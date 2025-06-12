@@ -114,19 +114,43 @@ check_entropy() {
             dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none
         done
         
-        # Check entropy again
+        # Verify entropy after improvements
         entropy=$(cat /proc/sys/kernel/random/entropy_avail 2>/dev/null || echo 0)
-        echo -e "${BLUE}Current entropy: ${entropy}/4096${NC}"
-        
-        if [ "$entropy" -lt 500 ]; then
-            echo -e "${YELLOW}Warning: Entropy is still low (${entropy}/4096)${NC}"
-            echo -e "${YELLOW}You may want to run these commands in another terminal to generate more entropy:"
-            echo -e "${GREEN}while true; do dd if=/dev/urandom of=/dev/null bs=1024 count=1024 status=none; done${NC}"
-            echo -e "${YELLOW}Press Ctrl+C when entropy is above 500${NC}"
-        fi
-    else
-        echo -e "${GREEN}System entropy is good (${entropy}/4096)${NC}"
+        echo -e "${GREEN}Current entropy level: ${entropy}/4096${NC}"
     fi
+}
+
+# Function to synchronize system clock
+sync_system_clock() {
+    echo -e "${BLUE}Attempting to synchronize system clock...${NC}"
+    
+    # Install systemd-timesyncd if not installed
+    if ! systemctl is-active --quiet systemd-timesyncd; then
+        echo -e "${BLUE}Enabling systemd-timesyncd...${NC}"
+        systemctl enable --now systemd-timesyncd
+    fi
+    
+    # Force time sync
+    if command -v timedatectl >/dev/null 2>&1; then
+        echo -e "${BLUE}Forcing time synchronization...${NC}"
+        timedatectl set-ntp true
+        systemctl restart systemd-timesyncd
+        sleep 2
+        
+        # Show sync status
+        echo -e "${GREEN}System time: $(date)${NC}"
+        timedatectl timesync-status --no-pager
+    else
+        echo -e "${YELLOW}timedatectl not found, cannot synchronize time${NC}"
+    fi
+    
+    # Check NTP synchronization
+    if ! check_ntp; then
+        echo -e "${YELLOW}Warning: Could not synchronize with NTP servers${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}System clock synchronized successfully${NC}"
 }
 
 # Function to check and fix NTP synchronization
