@@ -18,11 +18,21 @@
 # === Script Setup ===
 set -euo pipefail
 
-# Check for essential tools
+# Check and install essential tools
 if ! command -v ls >/dev/null 2>&1; then
-    echo "Error: Essential tool not found: coreutils"
-    echo "Please install base system tools first with: pacman -S base base-devel"
-    exit 1
+    echo "Essential tool not found: coreutils"
+    echo "Attempting to install coreutils..."
+    if command -v pacman >/dev/null 2>&1; then
+        pacman -Sy --noconfirm coreutils || {
+            echo "Failed to install coreutils. Please run 'pacman -Syu' first, then try again."
+            exit 1
+        }
+        echo "Successfully installed coreutils"
+    else
+        echo "Error: Package manager (pacman) not found. Cannot install coreutils."
+        echo "Please install coreutils manually and try again."
+        exit 1
+    fi
 fi
 
 # === Colors ===
