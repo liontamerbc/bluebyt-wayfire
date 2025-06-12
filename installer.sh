@@ -28,9 +28,9 @@ readonly NC='\033[0m'
 
 # === Critical Safety Checks ===
 # Initialize wait time variables
-local wait_time=5
-local max_wait_time=30
-local backoff_factor=1.5
+wait_time=5
+max_wait_time=30
+backoff_factor=1.5
 
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
