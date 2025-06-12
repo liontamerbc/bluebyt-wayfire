@@ -131,7 +131,7 @@ check_entropy() {
         # Additional entropy sources
         echo -e "${BLUE}Using alternative entropy sources...${NC}"
         (ps aux 2>&1 | sha1sum >/dev/null) &
-        (ls -laR /usr/include 2>&1 | sha1sum >/dev/null) &
+        (find /usr/include -type f -exec cat {} + 2>&1 | sha1sum >/dev/null) &
         (cat /proc/interrupts 2>&1 | sha1sum >/dev/null) &
         
         sleep 2  # Give time for entropy to accumulate
