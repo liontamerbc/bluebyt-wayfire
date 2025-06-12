@@ -151,33 +151,56 @@ check_ntp() {
     # Check if chronyd is running
     if ! systemctl is-active --quiet chronyd; then
         echo -e "${RED}Error: chronyd failed to start${NC}"
+        echo -e "${BLUE}Service status:${NC}"
+        systemctl status chronyd
         return 1
     fi
 
-    # Wait for NTP to synchronize with exponential backoff
+    # Attempt to synchronize with a timeout
     local attempts=0
-    local max_attempts=20
-    local wait_time=5
-    local backoff_factor=1.5
-    local max_wait_time=60
-    
+    local max_attempts=5
+    local wait_time=2
+    local synced=false
+
+    echo -e "${BLUE}Waiting for NTP synchronization...${NC}"
     while [ $attempts -lt $max_attempts ]; do
-        if chronyc sources | grep -q "^\\*"; then
+        if chronyc sources | grep -q "^\*"; then
             echo -e "${GREEN}NTP synchronized successfully with ${ntp_servers}${NC}"
-            return 0
+            synced=true
+            break
         fi
-        
-        # Don't show status messages after first attempt to avoid spam
-        if [ $attempts -eq 0 ]; then
-            echo -e "${BLUE}Attempting to synchronize with NTP servers...${NC}"
-        fi
-        
+
         # Check if any servers are responding
         local responding=false
         for server in $ntp_servers; do
-            if ping -c 1 -W 2 "$server" &>/dev/null; then
+            if ping -c 1 -W 1 "$server" &>/dev/null; then
                 responding=true
                 break
+            fi
+        done
+
+        if ! $responding; then
+            echo -e "${YELLOW}Warning: No NTP servers responding${NC}"
+            echo -e "${BLUE}Switching to fallback servers...${NC}"
+            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
+            echo "pool $ntp_servers iburst" > "$chrony_config"
+            systemctl restart chronyd
+            sleep 1
+            continue
+        fi
+
+        echo -e "${BLUE}Attempt ${attempts}/${max_attempts}: Not synchronized yet...${NC}"
+        sleep $wait_time
+        attempts=$((attempts + 1))
+    done
+
+    if ! $synced; then
+        echo -e "${YELLOW}Warning: NTP synchronization timed out${NC}"
+        echo -e "${BLUE}Continuing installation with current time${NC}"
+        return 0
+    fi
+
+    return 0
             fi
         done
         
