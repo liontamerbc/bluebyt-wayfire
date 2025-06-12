@@ -191,24 +191,20 @@ check_ntp() {
         fi
     fi
 
-    # If both methods fail, warn but continue
-    echo -e "${RED}Warning: Failed to synchronize system time${NC}"
-    echo -e "${YELLOW}Continuing installation with current time${NC}"
-    echo -e "${YELLOW}You may need to manually set the correct time later${NC}"
-    return 0
-}
-
-    # If all attempts fail, try one final sync with ntpdate as fallback
+    # If both methods fail, try one final sync with ntpdate as fallback
     if ! command -v ntpdate &>/dev/null; then
+        echo -e "${BLUE}Installing ntpdate...${NC}"
         pacman -S --noconfirm ntp
     fi
     
+    echo -e "${BLUE}Attempting final sync with ntpdate...${NC}"
     if ntpdate -u pool.ntp.org &>/dev/null; then
         echo -e "${GREEN}Successfully synchronized using ntpdate${NC}"
         return 0
     fi
 
     # If all else fails, try a direct connection to a known good server
+    echo -e "${YELLOW}Trying known NTP servers...${NC}"
     local known_servers=(
         "time.cloudflare.com"
         "time.google.com"
@@ -238,8 +234,8 @@ check_ntp() {
         return 0
     fi
 
-    # Restore original config
-    if [ -f "$backup_config" ]; then
+    # If we have a backup config, restore it
+    if [ -n "${backup_config:-}" ] && [ -f "$backup_config" ]; then
         cp -f "$backup_config" "$chrony_config"
         rm -f "$backup_config"
     fi
@@ -247,14 +243,8 @@ check_ntp() {
     echo -e "${RED}Error: Failed to synchronize NTP after all attempts${NC}"
     echo -e "${YELLOW}Continuing installation with current time...${NC}"
     return 0  # Don't fail the entire installation
+}
 
-    # Wait for NTP to synchronize with exponential backoff
-    local attempts=0
-    local max_attempts=20
-    local wait_time=5
-    local backoff_factor=1.5
-    local max_wait_time=60
-    
     # Start chronyd if not running
     if ! systemctl is-active --quiet chronyd; then
         echo -e "${BLUE}Starting chronyd...${NC}"
@@ -308,48 +298,8 @@ check_ntp() {
         attempts=$((attempts + 1))
     done
 
-    # If all attempts fail, try one final sync with ntpdate as fallback
-    if ! command -v ntpdate &>/dev/null; then
-        pacman -S --noconfirm ntp
-    fi
-    
-    if ntpdate -u pool.ntp.org &>/dev/null; then
-        echo -e "${GREEN}Successfully synchronized using ntpdate${NC}"
-        return 0
-    fi
-
-    # If all else fails, try a direct connection to a known good server
-    local known_servers=(
-        "time.cloudflare.com"
-        "time.google.com"
-        "time.apple.com"
-        "time.windows.com"
-    )
-    
-    for server in "${known_servers[@]}"; do
-        if ping -c 1 -W 2 "$server" &>/dev/null; then
-            echo -e "${BLUE}Attempting direct sync with ${server}...${NC}"
-            if ntpdate -u "$server" &>/dev/null; then
-                echo -e "${GREEN}Successfully synchronized with ${server}${NC}"
-                return 0
-            fi
-        fi
-    done
-
-    # As a last resort, try setting time manually
-    echo -e "${BLUE}Attempting manual time synchronization...${NC}"
-    local current_time=$(date -u +%s)
-    local target_time=$((current_time + 3600))  # Add 1 hour to ensure we're in the future
-    date -u -s "@${target_time}" &>/dev/null
-    hwclock -w &>/dev/null
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Successfully synchronized time manually${NC}"
-        return 0
-    fi
-
-    # Restore original config
-    if [ -f "$backup_config" ]; then
+    # If we have a backup config, restore it
+    if [ -n "${backup_config:-}" ] && [ -f "$backup_config" ]; then
         cp -f "$backup_config" "$chrony_config"
         rm -f "$backup_config"
     fi
