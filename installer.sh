@@ -96,17 +96,38 @@ check_entropy() {
 
 # Function to check and fix NTP synchronization
 check_ntp() {
+    local chrony_config="/etc/chrony.conf"
+    local attempts=0
+    local responding=false
+    local ntp_servers="pool.ntp.org"
+
     echo -e "${BLUE}Checking NTP synchronization...${NC}"
     
+    # Install chrony if not present
+    if ! systemctl list-unit-files chronyd.service &>/dev/null; then
+        echo -e "${BLUE}Installing chrony...${NC}"
+        pacman -S --noconfirm chrony
+    fi
+
     # Install ntp if not present
     if ! command -v ntpdate &>/dev/null; then
         echo -e "${BLUE}Installing NTP utilities...${NC}"
         pacman -S --noconfirm ntp
     fi
 
+    # Ensure chrony is enabled and started
+    systemctl enable chronyd.service
+    systemctl start chronyd.service
+
+    # Verify chrony config exists
+    if [ ! -f "$chrony_config" ]; then
+        echo -e "${BLUE}Creating default chrony configuration...${NC}"
+        echo "pool $ntp_servers iburst" > "$chrony_config"
+    fi
+
     # Try to synchronize time immediately using ntpdate
     echo -e "${BLUE}Attempting to synchronize system time...${NC}"
-    if ntpdate -u pool.ntp.org &>/dev/null; then
+    if ntpdate -u $ntp_servers &>/dev/null; then
         echo -e "${GREEN}System time synchronized successfully${NC}"
         return 0
     fi
@@ -118,22 +139,24 @@ check_ntp() {
         return 0
     fi
 
+    # Try fallback servers if primary fails
+    if ! $responding; then
+        # Try fallback servers only once
+        if [ $attempts -eq 0 ]; then
+            echo -e "${BLUE}Switching to fallback NTP servers...${NC}"
+            ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
+            echo "pool $ntp_servers iburst" > "$chrony_config"
+            systemctl restart chronyd
+            attempts=1
+        fi
+    fi
+
     # If both methods fail, warn but continue
     echo -e "${RED}Warning: Failed to synchronize system time${NC}"
     echo -e "${YELLOW}Continuing installation with current time${NC}"
     echo -e "${YELLOW}You may need to manually set the correct time later${NC}"
     return 0
 }
-            
-        if ! $responding; then
-            # Try fallback servers only once
-            if [ $attempts -eq 0 ]; then
-                echo -e "${BLUE}Switching to fallback NTP servers...${NC}"
-                ntp_servers="0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org"
-                echo "pool $ntp_servers iburst" > "$chrony_config"
-                systemctl restart chronyd
-            fi
-        fi
         
         # Cap wait time at max_wait_time
         wait_time=$(awk "BEGIN {print int($wait_time * $backoff_factor)}")
