@@ -470,9 +470,6 @@ run "cp -a /etc/timezone \"$SYSTEM_BACKUP_DIR/\""
 
 # === Constants ===
 readonly SCRIPT_VERSION="3.0.0"
-SCRIPT_NAME
-SCRIPT_NAME="$(basename "$0")"
-# Removed unused SCRIPT_NAME
 SCRIPT_DIR
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 readonly SCRIPT_DIR
@@ -494,7 +491,7 @@ readonly NC='\033[0m'
 FAILED=false
 DRY_RUN=false
 AUTO_YES=false
-set_fish=false
+# Removed unused set_fish
 
 # === Configuration ===
 THEME="TokyoNight-Dark"
@@ -699,7 +696,8 @@ EOF
 }
 
 # === Main Installation ===
-main() {
+main()
+{
     # === Command Line Parsing ===
     while getopts ":t:pwnghy" opt; do
         case "${opt}" in
@@ -764,13 +762,15 @@ main() {
     fi
     
     # Check memory
-    local mem=$(free -m | awk '/Mem:/ {print $2}')
+    local mem
+    mem=$(free -m | awk '/Mem:/ {print $2}')
     if [ "$mem" -lt 2048 ]; then
         warn "Low memory detected ($mem MB). Installation may be slow."
     fi
 
     # Check CPU cores
-    local cores=$(nproc)
+    local cores
+    cores=$(nproc)
     if [ "$cores" -lt 4 ]; then
         warn "Low CPU cores detected ($cores cores). Installation may be slow."
     fi
@@ -795,7 +795,7 @@ main() {
     
     # Verify package installation
     for pkg in $ALL_PACKAGES; do
-        if ! command -v $pkg >/dev/null 2>&1; then
+        if ! command -v "$pkg" >/dev/null 2>&1; then
             error "Failed to install required package: $pkg"
             exit 1
         fi
@@ -822,13 +822,15 @@ main() {
     check_space 10000  # 10GB minimum required for full installation
     
     # Check memory
-    local mem=$(free -m | awk '/Mem:/ {print $2}')
+    local mem
+    mem=$(free -m | awk '/Mem:/ {print $2}')
     if [ "$mem" -lt 2048 ]; then
         warn "Low memory detected. Installation may be slow."
     fi
 
     # Check CPU cores
-    local cores=$(nproc)
+    local cores
+    cores=$(nproc)
     if [ "$cores" -lt 4 ]; then
         warn "Low CPU cores detected. Installation may be slow."
     fi
@@ -850,7 +852,7 @@ main() {
     
     # Verify package installation
     for pkg in $ESSENTIALS; do
-        if ! command -v $pkg >/dev/null 2>&1; then
+        if ! command -v "$pkg" >/dev/null 2>&1; then
             error "Failed to install required package: $pkg"
             exit 1
         fi
@@ -914,7 +916,7 @@ plugins = ipc ipc-rules follow-focus
 [autostart]
 launcher = $IPC_DIR/inactive-alpha.py
 EOF
-        if [ $? -ne 0 ]; then
+        if ! sudo tee "$config_file" >/dev/null; then
             error "Failed to create wayfire.ini"
             exit 1
         fi
@@ -936,7 +938,7 @@ EOF
 [ipc]
 socket_path = /tmp/wayfire-wayland-1.socket
 EOF
-        if [ $? -ne 0 ]; then
+        if ! sudo tee "$ipc_config" >/dev/null; then
             error "Failed to create ipc configuration"
             exit 1
         fi
@@ -966,7 +968,8 @@ EOF
         exit 1
     fi
     
-    local wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    local wayfire_version
+    wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     if [ -z "$wayfire_version" ]; then
         error "Wayfire version verification failed"
         exit 1
@@ -1298,8 +1301,8 @@ EOF
         "systemd-hostnamed"
     )
     
-    # Enable monitoring services
-    # Removed unused MONITORING_SERVICES
+    # System services to enable
+    local SYSTEM_SERVICES=(
         "systemd-journald"
         "systemd-udevd"
         "systemd-networkd"
@@ -1391,14 +1394,16 @@ EOF
     run "sudo timedatectl set-ntp true"
     
     # Set hostname
-    local hostname=$(hostname)
+    local hostname
+    hostname=$(hostname)
     if [ -n "$hostname" ]; then
         run "sudo hostnamectl set-hostname $hostname"
     fi
     
     # Set locale
     if [ -f /etc/locale.conf ]; then
-        local locale=$(cat /etc/locale.conf | grep LANG | cut -d= -f2)
+        local locale
+        locale=$(grep LANG /etc/locale.conf | cut -d= -f2)
         if [ -z "$locale" ]; then
             run "sudo localectl set-locale LANG=en_US.UTF-8"
         fi
@@ -1463,14 +1468,16 @@ EOF
     run "sudo timedatectl set-ntp true"
     
     # Set hostname
-    local hostname=$(hostname)
+    local hostname
+    hostname=$(hostname)
     if [ -n "$hostname" ]; then
         run "sudo hostnamectl set-hostname $hostname"
     fi
     
     # Set locale
     if [ -f /etc/locale.conf ]; then
-        local locale=$(cat /etc/locale.conf | grep LANG | cut -d= -f2)
+        local locale
+        locale=$(grep LANG /etc/locale.conf | cut -d= -f2)
         if [ -z "$locale" ]; then
             run "sudo localectl set-locale LANG=en_US.UTF-8"
         fi
@@ -1606,7 +1613,8 @@ EOF
     fi
     
     # Verify Wayfire version and configure
-    local wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+    local wayfire_version
+    wayfire_version=$(wayfire --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
     if [ -z "$wayfire_version" ]; then
         error "Wayfire version verification failed"
         exit 1
