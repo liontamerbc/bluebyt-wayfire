@@ -1,51 +1,64 @@
 #!/bin/bash
 
-# Ensure we have a sane PATH
+# Set a minimal, known-good PATH first
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin"
-################################################################################
-# bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
-# Maintainer: liontamerbc
-# Version: 3.0.0
-# 
-# Enhanced installer with improved error handling, logging, and user experience
-# Features:
-# - Robust error handling with retries and timeouts
-# - Comprehensive logging with timestamps
-# - Parallel package installation support
-# - Enhanced security features
-# - Better user feedback and progress indicators
-# - Comprehensive configuration validation
-# - For Arch Linux and derivatives ONLY
-################################################################################
 
-# === Script Setup ===
-set -euo pipefail
+# Define colors before using them
+RED='\033[0;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+NC='\033[0m' # No Color
 
-# Check and install essential tools
-echo "Checking for essential system tools..."
-if ! command -v ls >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! command -v awk >/dev/null 2>&1; then
-    echo "Essential system tools not found. Attempting to install coreutils and other base packages..."
+# Simple check if we're root
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "${RED}Error: This script must be run as root${NC}"
+    exit 1
+fi
+
+# Check for Arch Linux
+if [ ! -f /etc/arch-release ] && ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
+    echo -e "${RED}Error: This script is only compatible with Arch Linux${NC}"
+    exit 1
+fi
+
+# Check for internet connectivity
+echo -n "Checking internet connection... "
+if ! ping -c 1 -W 5 8.8.8.8 &>/dev/null && ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
+    echo -e "${RED}Failed${NC}"
+    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
+    exit 1
+fi
+echo -e "${GREEN}OK${NC}"
+
+# Update package databases
+echo -n "Updating package databases... "
+if ! pacman -Sy --noconfirm &>/dev/null; then
+    echo -e "${RED}Failed${NC}"
+    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Done${NC}"
+
+# Install core packages if not present
+echo -n "Checking for core packages... "
+if ! pacman -Q base base-devel bc &>/dev/null; then
+    echo -e "${YELLOW}Not found${NC}"
+    echo "Installing core packages..."
     
-    # Check if we have internet connectivity
-    if ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
-        echo -e "${RED}Error: No internet connection detected${NC}"
-        echo -e "${YELLOW}Please ensure you have internet access and try again${NC}"
-        exit 1
+    if ! pacman -S --noconfirm --needed base base-devel bc; then
+        echo -e "${RED}Failed to install core packages${NC}"
+        echo -e "${YELLOW}Trying with full system upgrade...${NC}"
+        pacman -Syu --noconfirm
+        if ! pacman -S --noconfirm --needed base base-devel bc; then
+            echo -e "${RED}Critical: Failed to install essential packages${NC}"
+            exit 1
+        fi
     fi
-    
-    # Check for pacman using absolute path
-    if [ ! -x /usr/bin/pacman ]; then
-        echo -e "${RED}Error: pacman package manager not found at /usr/bin/pacman${NC}"
-        echo -e "${YELLOW}This script requires an Arch Linux system with pacman${NC}"
-        exit 1
-    fi
-    
-    echo "Updating package databases..."
-    if ! /usr/bin/pacman -Sy --noconfirm; then
-        echo -e "${RED}Failed to update package databases${NC}"
-        echo -e "${YELLOW}Please check your internet connection and try again${NC}"
-        exit 1
-    fi
+    echo -e "${GREEN}Core packages installed${NC}"
+else
+    echo -e "${GREEN}Found${NC}"
+fi
     
     echo "Installing core system packages..."
     if ! /usr/bin/pacman -Q base base-devel bc &>/dev/null; then
