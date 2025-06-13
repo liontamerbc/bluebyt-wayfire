@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
+
+# Ensure we have a sane PATH
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin"
 ################################################################################
 # bluebyt-wayfire Desktop Installer for Arch Linux (Enhanced Version)
 # Maintainer: liontamerbc
@@ -30,34 +33,43 @@ if ! command -v ls >/dev/null 2>&1 || ! command -v grep >/dev/null 2>&1 || ! com
         exit 1
     fi
     
-    # Check for pacman
-    if ! command -v pacman >/dev/null 2>&1; then
-        echo -e "${RED}Error: pacman package manager not found${NC}"
+    # Check for pacman using absolute path
+    if [ ! -x /usr/bin/pacman ]; then
+        echo -e "${RED}Error: pacman package manager not found at /usr/bin/pacman${NC}"
         echo -e "${YELLOW}This script requires an Arch Linux system with pacman${NC}"
         exit 1
     fi
     
     echo "Updating package databases..."
-    if ! pacman -Sy --noconfirm; then
+    if ! /usr/bin/pacman -Sy --noconfirm; then
         echo -e "${RED}Failed to update package databases${NC}"
         echo -e "${YELLOW}Please check your internet connection and try again${NC}"
         exit 1
     fi
     
     echo "Installing core system packages..."
-    if ! pacman -S --noconfirm --needed base base-devel bc; then
-        echo "Failed to install missing tools. Trying with full system upgrade..."
-        pacman -Syu --noconfirm
-        pacman -S --noconfirm --needed base base-devel bc
+    if ! /usr/bin/pacman -Q base base-devel bc &>/dev/null; then
+        echo "Installing missing core packages..."
+        if ! /usr/bin/pacman -S --noconfirm --needed base base-devel bc; then
+            echo "Full system upgrade and retry..."
+            /usr/bin/pacman -Syu --noconfirm
+            /usr/bin/pacman -S --noconfirm --needed base base-devel bc || {
+                echo -e "${RED}Failed to install essential packages${NC}"
+                exit 1
+            }
+        fi
+    else
+        echo "Core packages are already installed"
     fi
     
-    # Verify installation
-    if ! command -v ls >/dev/null 2>&1; then
-        echo -e "${RED}Critical error: Failed to install essential tools${NC}"
-        echo -e "${YELLOW}Please install coreutils manually and try again:${NC}"
-        echo -e "    mount -o remount,size=2G /tmp  # If low on memory"
-        echo -e "    pacman -Syu"
-        echo -e "    pacman -S --needed base base-devel bc"
+    # Verify installation using absolute paths
+    if [ ! -x /usr/bin/ls ] || [ ! -x /usr/bin/grep ] || [ ! -x /usr/bin/awk ]; then
+        echo -e "${RED}Critical error: Essential binaries not found in expected locations${NC}"
+        echo -e "${YELLOW}Please verify your system installation${NC}"
+        echo -e "Missing binaries:"
+        [ -x /usr/bin/ls ] || echo "  - /usr/bin/ls"
+        [ -x /usr/bin/grep ] || echo "  - /usr/bin/grep"
+        [ -x /usr/bin/awk ] || echo "  - /usr/bin/awk"
         exit 1
     fi
     
