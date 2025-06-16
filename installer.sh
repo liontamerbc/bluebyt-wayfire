@@ -1,23 +1,23 @@
 #!/bin/bash
 
+# === Colors ===
+readonly RED='\033[0;31m'
+readonly GREEN='\033[1;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[1;34m'
+readonly NC='\033[0m'
+
 # Set a minimal, known-good PATH first
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin"
 
-# Define colors before using them
-RED='\033[0;31m'
-GREEN='\033[1;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[1;34m'
-NC='\033[0m' # No Color
-
-# Simple check if we're root
-if [ "$(id -u)" -ne 0 ]; then
+# Check if running as root
+if [ "$(id -u)" != "0" ]; then
     echo -e "${RED}Error: This script must be run as root${NC}"
     exit 1
 fi
 
-# Check for Arch Linux
-if [ ! -f /etc/arch-release ] && ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
+# Check if running on Arch Linux
+if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
     echo -e "${RED}Error: This script is only compatible with Arch Linux${NC}"
     exit 1
 fi
@@ -72,19 +72,6 @@ if [ ! -x /usr/bin/ls ] || [ ! -x /usr/bin/grep ] || [ ! -x /usr/bin/awk ]; then
 fi
 
 echo -e "${GREEN}Successfully installed essential system tools${NC}"
-
-# === Colors ===
-readonly RED='\033[0;31m'
-readonly GREEN='\033[1;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[1;34m'
-readonly NC='\033[0m'
-
-# Check if running as root
-if [ "$(id -u)" != "0" ]; then
-    echo -e "${RED}Error: This script must be run as root${NC}"
-    exit 1
-fi
 
 # Check if running on Arch Linux
 if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
