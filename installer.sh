@@ -22,52 +22,8 @@ if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
     exit 1
 fi
 
-# Check for internet connectivity
-echo -n "Checking internet connection... "
-if ! ping -c 1 -W 5 8.8.8.8 &>/dev/null && ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
-    echo -e "${RED}Failed${NC}"
-    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
-    exit 1
-fi
-echo -e "${GREEN}OK${NC}"
-
-# Update package databases
-echo -n "Updating package databases... "
-if ! pacman -Sy --noconfirm &>/dev/null; then
-    echo -e "${RED}Failed${NC}"
-    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
-    exit 1
-fi
-echo -e "${GREEN}Done${NC}"
-
-echo -e "${GREEN}Basic system verification complete${NC}"
-
-# Check system architecture
-ARCH=$(uname -m)
-if [ "$ARCH" != "x86_64" ]; then
-    echo -e "${RED}Error: This script is only compatible with x86_64 architecture${NC}"
-    echo -e "${YELLOW}Detected architecture: $ARCH${NC}"
-    exit 1
-fi
-
-# Check if running in a virtual environment
-if [ -d /sys/module/kvm ] || [ -d /sys/module/vboxdrv ] || [ -d /sys/module/virtio ]; then
-    echo -e "${YELLOW}Warning: Running in a virtual environment detected${NC}"
-fi
-
-# Check security modules
-if command -v getenforce &>/dev/null; then
-    if [ "$(getenforce)" = "Enforcing" ]; then
-        echo -e "${YELLOW}Warning: SELinux is in Enforcing mode${NC}"
-        echo -e "${YELLOW}This might interfere with package installation${NC}"
-    fi
-fi
-
-if command -v aa-status &>/dev/null; then
-    if aa-status --enabled; then
-        echo -e "${YELLOW}Warning: AppArmor is enabled${NC}"
-        echo -e "${YELLOW}This might interfere with package installation${NC}"
-    fi
+# Verify essential system tools first
+ESSENTIAL_TOOLS=(bash pacman coreutils grep sed awk)
 fi
 
 # Verify essential system tools
