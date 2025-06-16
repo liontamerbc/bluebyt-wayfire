@@ -40,38 +40,21 @@ if ! pacman -Sy --noconfirm &>/dev/null; then
 fi
 echo -e "${GREEN}Done${NC}"
 
-# Install core packages if not present
-echo -n "Checking for core packages... "
-if ! pacman -Q base base-devel bc &>/dev/null; then
-    echo -e "${YELLOW}Not found${NC}"
-    echo "Installing core packages..."
-    
-    if ! pacman -S --noconfirm --needed base base-devel bc; then
-        echo -e "${RED}Failed to install core packages${NC}"
-        echo -e "${YELLOW}Trying with full system upgrade...${NC}"
-        pacman -Syu --noconfirm
-        if ! pacman -S --noconfirm --needed base base-devel bc; then
-            echo -e "${RED}Critical: Failed to install essential packages${NC}"
-            exit 1
-        fi
-    fi
-    echo -e "${GREEN}Core packages installed${NC}"
-else
-    echo -e "${GREEN}Found${NC}"
-fi
+# Skip package installation on minimal Arch Linux as these should already be present
+echo -e "${GREEN}Skipping core package installation (already present in Arch Linux minimal)${NC}"
 
-# Verify installation using absolute paths
-if [ ! -x /usr/bin/ls ] || [ ! -x /usr/bin/grep ] || [ ! -x /usr/bin/awk ]; then
-    echo -e "${RED}Critical error: Essential binaries not found in expected locations${NC}"
+# Verify essential binaries are available
+if ! command -v ls &>/dev/null || ! command -v grep &>/dev/null || ! command -v awk &>/dev/null; then
+    echo -e "${RED}Critical error: Essential binaries not found in PATH${NC}"
     echo -e "${YELLOW}Please verify your system installation${NC}"
     echo -e "Missing binaries:"
-    [ -x /usr/bin/ls ] || echo "  - /usr/bin/ls"
-    [ -x /usr/bin/grep ] || echo "  - /usr/bin/grep"
-    [ -x /usr/bin/awk ] || echo "  - /usr/bin/awk"
+    command -v ls &>/dev/null || echo "  - ls"
+    command -v grep &>/dev/null || echo "  - grep"
+    command -v awk &>/dev/null || echo "  - awk"
     exit 1
 fi
 
-echo -e "${GREEN}Successfully installed essential system tools${NC}"
+echo -e "${GREEN}Essential system tools verified${NC}"
 
 # Check system architecture
 ARCH=$(uname -m)
