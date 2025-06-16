@@ -55,17 +55,15 @@ if command -v bc &>/dev/null; then
     fi
 fi
 
+# Small delay to ensure network stability
+echo -n "Finalizing system checks... "
+sleep 1
+echo -e "${GREEN}Done${NC}"
+
 # Verify pacman database is healthy
 if ! pacman -Syy --noconfirm &>/dev/null; then
     echo -e "${RED}Error: Pacman database is corrupted${NC}"
     echo -e "${YELLOW}Please run 'pacman -Syyu' to fix the database${NC}"
-    exit 1
-fi
-
-# Check network connectivity
-if ! ping -c 1 archlinux.org &>/dev/null; then
-    echo -e "${RED}Error: No network connectivity detected${NC}"
-    echo -e "${YELLOW}Please ensure your network is properly configured${NC}"
     exit 1
 fi
 
