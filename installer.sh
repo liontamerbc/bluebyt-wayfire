@@ -59,26 +59,19 @@ if ! pacman -Q base base-devel bc &>/dev/null; then
 else
     echo -e "${GREEN}Found${NC}"
 fi
-                exit 1
-            }
-        fi
-    else
-        echo "Core packages are already installed"
-    fi
-    
-    # Verify installation using absolute paths
-    if [ ! -x /usr/bin/ls ] || [ ! -x /usr/bin/grep ] || [ ! -x /usr/bin/awk ]; then
-        echo -e "${RED}Critical error: Essential binaries not found in expected locations${NC}"
-        echo -e "${YELLOW}Please verify your system installation${NC}"
-        echo -e "Missing binaries:"
-        [ -x /usr/bin/ls ] || echo "  - /usr/bin/ls"
-        [ -x /usr/bin/grep ] || echo "  - /usr/bin/grep"
-        [ -x /usr/bin/awk ] || echo "  - /usr/bin/awk"
-        exit 1
-    fi
-    
-    echo -e "${GREEN}Successfully installed essential system tools${NC}"
+
+# Verify installation using absolute paths
+if [ ! -x /usr/bin/ls ] || [ ! -x /usr/bin/grep ] || [ ! -x /usr/bin/awk ]; then
+    echo -e "${RED}Critical error: Essential binaries not found in expected locations${NC}"
+    echo -e "${YELLOW}Please verify your system installation${NC}"
+    echo -e "Missing binaries:"
+    [ -x /usr/bin/ls ] || echo "  - /usr/bin/ls"
+    [ -x /usr/bin/grep ] || echo "  - /usr/bin/grep"
+    [ -x /usr/bin/awk ] || echo "  - /usr/bin/awk"
+    exit 1
 fi
+
+echo -e "${GREEN}Successfully installed essential system tools${NC}"
 
 # === Colors ===
 readonly RED='\033[0;31m'
