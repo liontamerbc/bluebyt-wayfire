@@ -4,11 +4,13 @@
 readonly RED='\033[0;31m'
 readonly GREEN='\033[1;32m'
 readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[1;34m'
 readonly NC='\033[0m'
 
-# Set a minimal, known-good PATH first
+# Set a minimal, known-good PATH
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin"
+
+# Basic system checks
+echo -e "${GREEN}=== Starting System Check ===${NC}"
 
 # Check if running as root
 if [ "$(id -u)" != "0" ]; then
@@ -16,31 +18,33 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-# Check if running on Arch Linux
-if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
-    echo -e "${RED}Error: This script is only compatible with Arch Linux${NC}"
-    exit 1
-fi
-
-# Verify essential system tools
-ESSENTIAL_TOOLS=(bash pacman coreutils grep sed awk findmnt mount systemd bc)
-MISSING_TOOLS=()
-for tool in "${ESSENTIAL_TOOLS[@]}"; do
-    if ! command -v "$tool" &>/dev/null; then
-        MISSING_TOOLS+=("$tool")
+# Check for essential commands
+for cmd in bash pacman grep awk; do
+    if ! command -v "$cmd" &>/dev/null; then
+        echo -e "${RED}Error: Required command not found: $cmd${NC}"
+        exit 1
     fi
 done
 
-if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
-    echo -e "${RED}Error: Missing essential tools: ${MISSING_TOOLS[*]}${NC}"
-    echo -e "${YELLOW}This is unusual for a minimal Arch Linux installation${NC}"
-    echo -e "${YELLOW}Please verify your system installation${NC}"
+# Check for internet connectivity
+echo -n "Checking internet connection... "
+if ! ping -c 1 -W 5 8.8.8.8 &>/dev/null && ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
+    echo -e "${RED}Failed${NC}"
+    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
     exit 1
 fi
+echo -e "${GREEN}OK${NC}"
 
-# Now that we have bc, we can do the system load check
-load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
-if (( $(echo "$load > 4" | bc -l) )); then
+# Update package databases
+echo -n "Updating package databases... "
+if ! pacman -Sy --noconfirm &>/dev/null; then
+    echo -e "${RED}Failed${NC}"
+    echo -e "${YELLOW}Please check your internet connection and try again${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Done${NC}"
+
+echo -e "\n${GREEN}=== System Check Complete ===${NC}\n"
     echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
     echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
 fi
