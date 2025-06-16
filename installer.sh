@@ -59,15 +59,6 @@ if ! pacman -Q base base-devel bc &>/dev/null; then
 else
     echo -e "${GREEN}Found${NC}"
 fi
-    
-    echo "Installing core system packages..."
-    if ! /usr/bin/pacman -Q base base-devel bc &>/dev/null; then
-        echo "Installing missing core packages..."
-        if ! /usr/bin/pacman -S --noconfirm --needed base base-devel bc; then
-            echo "Full system upgrade and retry..."
-            /usr/bin/pacman -Syu --noconfirm
-            /usr/bin/pacman -S --noconfirm --needed base base-devel bc || {
-                echo -e "${RED}Failed to install essential packages${NC}"
                 exit 1
             }
         fi
