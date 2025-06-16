@@ -195,7 +195,11 @@ fatal() {
 progress() {
     local timestamp
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-@ -193,45 +59,47 @@ run() {
+    echo -ne "${BLUE}[$timestamp] [PROGRESS]${NC} $*\r"
+}
+
+run() {
+    if [ "$DRY_RUN" = true ]; then
         echo "[DRY-RUN] $*"
         return 0
     fi
@@ -203,7 +207,6 @@ progress() {
     local cmd="$*"
     progress "Executing: $cmd"
     
-    if ! timeout $TIMEOUT_SECONDS "$cmd"; then
     if ! eval "$cmd"; then
         local error_msg="Command failed: $cmd"
         error "$error_msg"
