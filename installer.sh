@@ -73,12 +73,6 @@ fi
 
 echo -e "${GREEN}Successfully installed essential system tools${NC}"
 
-# Check if running on Arch Linux
-if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
-    echo -e "${RED}Error: This script is only compatible with Arch Linux and its derivatives${NC}"
-    exit 1
-fi
-
 # Check system architecture
 ARCH=$(uname -m)
 if [ "$ARCH" != "x86_64" ]; then
@@ -90,13 +84,6 @@ fi
 # Check if running in a virtual environment
 if [ -d /sys/module/kvm ] || [ -d /sys/module/vboxdrv ] || [ -d /sys/module/virtio ]; then
     echo -e "${YELLOW}Warning: Running in a virtual environment detected${NC}"
-fi
-
-# Check network connectivity
-if ! ping -c 1 -W 5 archlinux.org &>/dev/null; then
-    echo -e "${RED}Error: No internet connection detected${NC}"
-    echo -e "${YELLOW}Please ensure your virtual environment has internet access${NC}"
-    exit 1
 fi
 
 # Check security modules
