@@ -45,14 +45,14 @@ fi
 echo -e "${GREEN}Done${NC}"
 
 echo -e "\n${GREEN}=== System Check Complete ===${NC}\n"
-    echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
-    echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
-fi
 
-# Check if pacman is available and working
-if ! command -v pacman &>/dev/null; then
-    echo -e "${RED}Error: Pacman package manager not found${NC}"
-    exit 1
+# Check system load if bc is available
+if command -v bc &>/dev/null; then
+    load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
+    if (( $(echo "$load > 4" | bc -l) )); then
+        echo -e "${YELLOW}Warning: System load is high ($load)${NC}"
+        echo -e "${YELLOW}Consider waiting for lower load before proceeding${NC}"
+    fi
 fi
 
 # Verify pacman database is healthy
