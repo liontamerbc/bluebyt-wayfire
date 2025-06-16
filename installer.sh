@@ -22,12 +22,8 @@ if ! grep -q 'Arch Linux' /etc/os-release 2>/dev/null; then
     exit 1
 fi
 
-# Verify essential system tools first
-ESSENTIAL_TOOLS=(bash pacman coreutils grep sed awk)
-fi
-
 # Verify essential system tools
-ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd bc)
+ESSENTIAL_TOOLS=(bash pacman coreutils grep sed awk findmnt mount systemd bc)
 MISSING_TOOLS=()
 for tool in "${ESSENTIAL_TOOLS[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
@@ -37,7 +33,8 @@ done
 
 if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
     echo -e "${RED}Error: Missing essential tools: ${MISSING_TOOLS[*]}${NC}"
-    echo -e "${YELLOW}You can install them with: pacman -S --needed ${MISSING_TOOLS[*]}${NC}"
+    echo -e "${YELLOW}This is unusual for a minimal Arch Linux installation${NC}"
+    echo -e "${YELLOW}Please verify your system installation${NC}"
     exit 1
 fi
 
