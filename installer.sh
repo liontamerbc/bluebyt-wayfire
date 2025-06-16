@@ -40,21 +40,7 @@ if ! pacman -Sy --noconfirm &>/dev/null; then
 fi
 echo -e "${GREEN}Done${NC}"
 
-# Skip package installation on minimal Arch Linux as these should already be present
-echo -e "${GREEN}Skipping core package installation (already present in Arch Linux minimal)${NC}"
-
-# Verify essential binaries are available
-if ! command -v ls &>/dev/null || ! command -v grep &>/dev/null || ! command -v awk &>/dev/null; then
-    echo -e "${RED}Critical error: Essential binaries not found in PATH${NC}"
-    echo -e "${YELLOW}Please verify your system installation${NC}"
-    echo -e "Missing binaries:"
-    command -v ls &>/dev/null || echo "  - ls"
-    command -v grep &>/dev/null || echo "  - grep"
-    command -v awk &>/dev/null || echo "  - awk"
-    exit 1
-fi
-
-echo -e "${GREEN}Essential system tools verified${NC}"
+echo -e "${GREEN}Basic system verification complete${NC}"
 
 # Check system architecture
 ARCH=$(uname -m)
@@ -84,16 +70,20 @@ if command -v aa-status &>/dev/null; then
     fi
 fi
 
-# Check essential system tools first
+# Verify essential system tools
 ESSENTIAL_TOOLS=(bash coreutils grep sed awk findmnt mount systemd bc)
+MISSING_TOOLS=()
 for tool in "${ESSENTIAL_TOOLS[@]}"; do
     if ! command -v "$tool" &>/dev/null; then
-        echo -e "${RED}Error: Essential tool not found: $tool${NC}"
-        echo -e "${YELLOW}Please install base system tools first${NC}"
-        echo -e "${YELLOW}You can install them with: pacman -S --needed bash coreutils grep sed awk findutils systemd bc${NC}"
-        exit 1
+        MISSING_TOOLS+=("$tool")
     fi
 done
+
+if [ ${#MISSING_TOOLS[@]} -gt 0 ]; then
+    echo -e "${RED}Error: Missing essential tools: ${MISSING_TOOLS[*]}${NC}"
+    echo -e "${YELLOW}You can install them with: pacman -S --needed ${MISSING_TOOLS[*]}${NC}"
+    exit 1
+fi
 
 # Now that we have bc, we can do the system load check
 load=$(uptime | awk '{print $(NF-2)}' | sed 's/,//')
