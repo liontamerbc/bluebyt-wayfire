@@ -76,3 +76,14 @@ confirm() {
         case $REPLY in
             [Yy]* ) return 0;;
             [Nn]* ) return 1;;
+            * ) [ "$default" = "Y" ] && return 0 || return 1;;
+        esac
+    done
+}
+
+# === Cleanup Handler ===
+cleanup() {
+    local exit_code=$?
+    echo -e "\n${BLUE}=== Cleaning up ===${NC}"
+    if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
+        run
