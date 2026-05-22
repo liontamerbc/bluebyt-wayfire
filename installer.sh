@@ -1,49 +1,37 @@
 #!/bin/bash
 
-# Exit on any error
+# Ensure non-interactive and rootless operation
 set -e
+export PACMAN_OPTS="--noconfirm --needed"
 
-# Setup colors
-RED='\033[0;31m'
+# Colors
 GREEN='\033[1;32m'
+RED='\033[0;31m'
 NC='\033[0m'
 
-echo -e "${GREEN}Starting Installation...${NC}"
+log() { echo -e "${GREEN}[INFO]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check for root/sudo
-if [ "$EUID" -eq 0 ]; then
-    echo -e "${RED}Please run as a regular user, not root.${NC}"
-    exit 1
-fi
+# 1. Update system
+log "Updating system..."
+sudo pacman -Syu $PACMAN_OPTS
 
-# 1. Update and Install Core Packages
-echo "Installing packages..."
-sudo pacman -Syu --noconfirm
-# Removed wlogout and xava as they are AUR-only and break scripts
-sudo pacman -S --needed --noconfirm wayfire kitty fish wcm git gcc ninja rust sudo lxappearance base-devel curl pciutils meson bc
+# 2. Install Core Dependencies
+log "Installing dependencies..."
+sudo pacman -S $PACMAN_OPTS wayfire kitty fish wcm git gcc ninja rust sudo lxappearance base-devel curl pciutils meson bc mako swappy ufw
 
-# 2. Setup Config Directory
+# 3. Install AUR Packages (The "Bluebyt" components)
+log "Installing AUR components..."
+paru -S $PACMAN_OPTS ironbar-git eww-wayland-git tokyonight-gtk-theme-git tela-circle-icon-theme-git swayosd-git lite-xl ulauncher grimshot-pv-git ncmpcpp xava
+
+# 4. Setup Wayfire Configuration
+log "Applying configurations..."
 mkdir -p "$HOME/.config/wayfire"
+# Directly download the configs to avoid copy-paste corruption
+git clone https://github.com/liontamerbc/bluebyt-wayfire.git /tmp/bluebyt-temp
+cp -r /tmp/bluebyt-temp/.config/* "$HOME/.config/"
 
-# 3. Create Wayfire Config
-cat > "$HOME/.config/wayfire/wayfire.ini" << EOF
-[core]
-backend = auto
-vsync = true
-
-[output]
-primary = auto
-scale = 1
-
-[workspaces]
-number = 4
-
-[plugins]
-plugins = ipc ipc-rules follow-focus workspaces scale effects
-EOF
-
-# 4. Setup Desktop Session
-echo "Configuring session..."
+# 5. Create Session Entry
 sudo mkdir -p /usr/share/wayland-sessions
 sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
 [Desktop Entry]
@@ -53,5 +41,8 @@ Exec=wayfire
 Type=Application
 EOF
 
-echo -e "${GREEN}Installation finished successfully!${NC}"
-echo "Log out and select 'Wayfire' from your login screen."
+# 6. Finalize
+log "Installation complete!"
+log "1. Log out."
+log "2. Select 'Wayfire' at the login screen."
+log "3. Enjoy your new desktop."
