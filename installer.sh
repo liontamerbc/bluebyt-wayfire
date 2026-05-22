@@ -1,8 +1,7 @@
 #!/bin/bash
 
-# Ensure non-interactive and rootless operation
+# Exit on any error
 set -e
-export PACMAN_OPTS="--noconfirm --needed"
 
 # Colors
 GREEN='\033[1;32m'
@@ -12,26 +11,40 @@ NC='\033[0m'
 log() { echo -e "${GREEN}[INFO]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# 1. Update system
+# 1. Ensure system is updated
 log "Updating system..."
-sudo pacman -Syu $PACMAN_OPTS
+sudo pacman -Syu --noconfirm
 
-# 2. Install Core Dependencies
+# 2. Install basic build tools if missing
+sudo pacman -S --needed --noconfirm base-devel git
+
+# 3. Bootstrap AUR helper (paru) if not installed
+if ! command -v paru &> /dev/null; then
+    log "Installing paru (AUR helper)..."
+    git clone https://aur.archlinux.org/paru.git /tmp/paru
+    cd /tmp/paru
+    makepkg -si --noconfirm
+    cd ~
+    rm -rf /tmp/paru
+fi
+
+# 4. Install Core Packages
 log "Installing dependencies..."
-sudo pacman -S $PACMAN_OPTS wayfire kitty fish wcm git gcc ninja rust sudo lxappearance base-devel curl pciutils meson bc mako swappy ufw
+sudo pacman -S --needed --noconfirm wayfire kitty fish wcm git gcc ninja rust sudo lxappearance base-devel curl pciutils meson bc mako swappy ufw
 
-# 3. Install AUR Packages (The "Bluebyt" components)
+# 5. Install AUR Packages (The "Bluebyt" components)
 log "Installing AUR components..."
-paru -S $PACMAN_OPTS ironbar-git eww-wayland-git tokyonight-gtk-theme-git tela-circle-icon-theme-git swayosd-git lite-xl ulauncher grimshot-pv-git ncmpcpp xava
+paru -S --needed --noconfirm ironbar-git eww-wayland-git tokyonight-gtk-theme-git tela-circle-icon-theme-git swayosd-git lite-xl ulauncher grimshot-pv-git ncmpcpp xava
 
-# 4. Setup Wayfire Configuration
+# 6. Apply configurations
 log "Applying configurations..."
 mkdir -p "$HOME/.config/wayfire"
-# Directly download the configs to avoid copy-paste corruption
-git clone https://github.com/liontamerbc/bluebyt-wayfire.git /tmp/bluebyt-temp
-cp -r /tmp/bluebyt-temp/.config/* "$HOME/.config/"
+if [ ! -d "/tmp/bluebyt-wayfire" ]; then
+    git clone https://github.com/liontamerbc/bluebyt-wayfire.git /tmp/bluebyt-wayfire
+fi
+cp -r /tmp/bluebyt-wayfire/.config/* "$HOME/.config/"
 
-# 5. Create Session Entry
+# 7. Create Session Entry
 sudo mkdir -p /usr/share/wayland-sessions
 sudo tee /usr/share/wayland-sessions/wayfire.desktop >/dev/null <<EOF
 [Desktop Entry]
@@ -41,8 +54,5 @@ Exec=wayfire
 Type=Application
 EOF
 
-# 6. Finalize
 log "Installation complete!"
-log "1. Log out."
-log "2. Select 'Wayfire' at the login screen."
-log "3. Enjoy your new desktop."
+log "Log out and select 'Wayfire' from your login screen."
